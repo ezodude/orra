@@ -3,7 +3,7 @@
 
 ⚡️⚡️⚡️ **COMING SOON** ⚡️⚡️⚡️
 
-## Why?
+## Why
 
 The developer experience for orchestrating multi-agents for reliable and repeatable workflows in production is still lacking.
 
