@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "orra-cli"
+version = "0.1.0"
+description = "Orra is the fastest way to orchestrate and run AI Agents."
+authors = []
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
