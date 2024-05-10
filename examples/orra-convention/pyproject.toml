@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "base"
+name = "orra-create-run"
 version = "0.1.0"
-description = "An example to showcase how to use orray"
+description = "An example that illustrates the orra convention for setting up a workflow project."
 authors = []
 readme = "README.md"
 package-mode = false
