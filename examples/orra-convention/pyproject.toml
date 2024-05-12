@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "orra-create-run"
+name = "orra-convention"
 version = "0.1.0"
 description = "An example that illustrates the orra convention for setting up a workflow project."
 authors = []
@@ -8,6 +8,7 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
+orra = {path = "../../libs/orra", develop = true}
 
 
 [build-system]
