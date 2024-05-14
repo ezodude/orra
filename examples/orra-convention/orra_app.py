@@ -3,7 +3,11 @@ from typing import Any
 import activities
 from orra import Orra
 
-app = Orra()
+app = Orra(
+    state_def={
+        "tracked_issues": list[str]
+    }
+)
 
 
 @app.step
@@ -28,5 +32,3 @@ def author_workarounds(state: dict) -> Any:
 def resolve(state: dict) -> Any:
     print('decorated resolve state', state)
     return activities
-
-

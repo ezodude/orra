@@ -1,13 +1,20 @@
 from typing import Callable
 
+from typing import Any, TypedDict
+
+
+def _create_typed_dict(name: str, fields: dict[str, Any]) -> Any:
+    return TypedDict(name, fields)
+
 
 class Orra:
-    def __init__(self):
+    def __init__(self, state_def=None):
+        if state_def is None:
+            state_def = {}
+
         self._workflow = ""
         self._workflow_invoked = False
-        self._state = {
-            "tracked_issues": ["issue1", "issue2"],
-        }
+        self._StateDict = _create_typed_dict("StateDict", state_def)
 
     def step(self, func: Callable) -> Callable:
         print(f"decorated with step: {func.__name__}")
