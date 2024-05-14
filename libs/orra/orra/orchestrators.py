@@ -9,17 +9,17 @@ class Orra:
             "tracked_issues": ["issue1", "issue2"],
         }
 
-    def root(self, func: Callable) -> Callable:
-        print(f"decorated {func.__name__} as root")
-        self._workflow = func.__name__
+    def step(self, func: Callable) -> Callable:
+        print(f"decorated with step: {func.__name__}")
+        self._workflow = f"{self._workflow} | {func.__name__}" if len(self._workflow) > 0 else func.__name__
         return func
 
-    def after(self, act: str) -> Callable:
-        def decorator(func: Callable) -> Callable:
-            print(f"decorated {func.__name__} with activity: {act}")
-            self._workflow = f"{self._workflow} | {func.__name__}"
-            return func
-        return decorator
+    # def after(self, act: str) -> Callable:
+    #     def decorator(func: Callable) -> Callable:
+    #         print(f"decorated {func.__name__} with activity: {act}")
+    #         self._workflow = f"{self._workflow} | {func.__name__}"
+    #         return func
+    #     return decorator
 
     def run(self) -> None:
         self._workflow_invoked = True
