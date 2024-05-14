@@ -1,36 +1,38 @@
-import functools
 from typing import Callable
 
 
 class Orra:
     def __init__(self):
         self._workflow = ""
+        self._workflow_invoked = False
         self._state = {
             "tracked_issues": ["issue1", "issue2"],
         }
 
     def root(self, func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper_root(*args, **kwargs):
-            print(f"decorated {func.__name__} as root")
-            self._workflow = func.__name__
-            with_state = {**kwargs, "state": self._state}
-            return func(*args, **with_state)
+        print(f"decorated {func.__name__} as root")
+        self._workflow = func.__name__
+        return func
 
-        return wrapper_root
+    def after(self, act: str) -> Callable:
+        def decorator(func: Callable) -> Callable:
+            print(f"decorated {func.__name__} with activity: {act}")
+            self._workflow = f"{self._workflow} | {func.__name__}"
+            return func
+        return decorator
 
-    def after(self, activity: str) -> Callable:
-        def after_decorator(func: Callable) -> Callable:
-            @functools.wraps(func)
-            def wrapper_after(*args, **kwargs):
-                print(f"decorated {func.__name__} with activity: {activity}")
-                self._workflow = f"{self._workflow} | {func.__name__}"
-                with_state = {**kwargs, "state": self._state}
-                return func(*args, **with_state)
+    def run(self) -> None:
+        self._workflow_invoked = True
+        print("running: ", self._workflow)
 
-            return wrapper_after
-
-        return after_decorator
+    def stop(self) -> None:
+        self._workflow_invoked = False
+        print("stopping: ", self._workflow)
 
     def __call__(self) -> None:
+        if self._workflow_invoked:
+            print("Workflow already invoked")
+            return
+
+        print(f"{self._workflow}.invoke()")
         pass
