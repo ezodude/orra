@@ -1,14 +1,38 @@
-from typing import Callable
+from pydoc import Doc
+from typing import Type, Any, TypedDict, Callable, Annotated
 
-from typing import Any, TypedDict
+from fastapi import FastAPI
+from pydantic import BaseModel
 
 
 def _create_typed_dict(name: str, fields: dict[str, Any]) -> Any:
+    """
+        Create a TypedDict from a dictionary of fields
+    """
     return TypedDict(name, fields)
 
 
-class Orra:
-    def __init__(self, state_def=None):
+def _create_response_model(typed_dict: Type[Any]) -> Type[BaseModel]:
+    """
+        Create a Pydantic model from a TypedDict
+    """
+    class Model(BaseModel):
+        __annotations__ = typed_dict.__annotations__
+
+    return Model
+
+
+class StepResponse(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class Orra(FastAPI):
+    def __init__(self, state_def=None, **extra: Annotated[
+        Any,
+        Doc(),
+    ]):
+        super().__init__(**extra)
         if state_def is None:
             state_def = {}
 
@@ -19,7 +43,8 @@ class Orra:
     def step(self, func: Callable) -> Callable:
         print(f"decorated with step: {func.__name__}")
         self._workflow = f"{self._workflow} | {func.__name__}" if len(self._workflow) > 0 else func.__name__
-        return func
+
+        return self.post(path=f"/{func.__name__}", response_model=None)(func)
 
     # def after(self, act: str) -> Callable:
     #     def decorator(func: Callable) -> Callable:
@@ -29,17 +54,7 @@ class Orra:
     #     return decorator
 
     def run(self) -> None:
-        self._workflow_invoked = True
         print("running: ", self._workflow)
 
     def stop(self) -> None:
-        self._workflow_invoked = False
         print("stopping: ", self._workflow)
-
-    def __call__(self) -> None:
-        if self._workflow_invoked:
-            print("Workflow already invoked")
-            return
-
-        print(f"{self._workflow}.invoke()")
-        pass
