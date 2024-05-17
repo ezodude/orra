@@ -55,10 +55,9 @@ class Orra:
         self._register(func)
 
         response_model = self._StepResponseModel
-        # print(f"response_model: {response_model.model_fields}")
 
         @self._steps_app.post(f"/{func.__name__}")
-        def endpoint_wrapper(v: response_model):
+        def wrap_endpoint(v: response_model):
             func(v.dict())
 
         return func
@@ -70,17 +69,18 @@ class Orra:
     #         return func
     #     return decorator
 
-    def step_server(self) -> Callable:
-        # print_pydantic_models(self._steps_app)
+    def steps_server(self) -> Callable:
+        self._compiled_workflow = self._compile(self._workflow, self._steps)
+
+        @self._steps_app.post(f"/workflow")
+        def wrap_workflow():
+            self._compiled_workflow.invoke({})
+
         return self._steps_app
 
     def local(self) -> None:
         self._compiled_workflow = self._compile(self._workflow, self._steps)
         self._compiled_workflow.invoke({})
-
-    def run(self) -> None:
-        self._compiled_workflow = self._compile(self._workflow, self._steps)
-        # self.post(path=f"/workflow", response_model=None)(self._compiled_workflow.invoke)({})
 
     def _register(self, func: Callable):
         self._workflow.add_node(func.__name__, func)
