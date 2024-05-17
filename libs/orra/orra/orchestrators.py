@@ -1,63 +1,30 @@
-from pydoc import Doc
-from typing import Type, Any, TypedDict, Callable, Annotated
+from typing import Any, Callable
 
 import fastapi
-from pydantic import BaseModel
 from langgraph.graph import StateGraph, END
 
-
-def _create_typed_dict(name: str, fields: dict[str, Any]) -> Any:
-    """
-        Create a TypedDict from a dictionary of fields
-    """
-    return TypedDict(name, fields)
-
-
-def _create_response_model(typed_dict: Type[Any]) -> Type[BaseModel]:
-    """
-        Create a Pydantic model from a TypedDict
-    """
-    class Model(BaseModel):
-        __annotations__ = typed_dict.__annotations__
-
-    return Model
-
-
-def print_pydantic_models(app):
-    for route in app.routes:
-        if hasattr(route, "endpoint"):
-            print(f"Route: {route.path}")
-            for param in route.endpoint.__annotations__.values():
-                if issubclass(param, BaseModel):
-                    print(f"  Pydantic model: {param.__name__}")
-                    for field_name, field_value in param.__annotations__.items():
-                        print(f"    Field: {field_name}, Type: {field_value}")
+from .printers import print_pydantic_models_from
+from .typing_dynamic import create_typed_dict, create_response_model
 
 
 class Orra:
-    def __init__(self, state_def=None, **extra: Annotated[
-        Any,
-        Doc(),
-    ]):
-        super().__init__(**extra)
-        if state_def is None:
-            state_def = {}
+    def __init__(self, schema: dict[str, Any] = None):
+        if schema is None:
+            schema = {}
 
         self._steps_app = fastapi.FastAPI()
         self._steps = []
-        self._StateDict = _create_typed_dict("StateDict", state_def)
-        self._StepResponseModel = _create_response_model(self._StateDict)
+        self._StateDict = create_typed_dict("StateDict", schema)
+        self._StepResponseModel = create_response_model(self._StateDict)
         self._workflow = StateGraph(self._StateDict)
         self._compiled_workflow = None
 
     def step(self, func: Callable) -> Callable:
-        print(f"decorated with step: {func.__name__}")
         self._register(func)
-
         response_model = self._StepResponseModel
 
         @self._steps_app.post(f"/{func.__name__}")
-        def wrap_endpoint(v: response_model):
+        async def wrap_endpoint(v: response_model):
             func(v.dict())
 
         return func
@@ -69,16 +36,17 @@ class Orra:
     #         return func
     #     return decorator
 
-    def steps_server(self) -> Callable:
+    def run(self) -> Callable:
         self._compiled_workflow = self._compile(self._workflow, self._steps)
 
         @self._steps_app.post(f"/workflow")
-        def wrap_workflow():
+        async def wrap_workflow():
             self._compiled_workflow.invoke({})
 
+        print_pydantic_models_from(self._steps_app)
         return self._steps_app
 
-    def local(self) -> None:
+    def execute(self) -> None:
         self._compiled_workflow = self._compile(self._workflow, self._steps)
         self._compiled_workflow.invoke({})
 
@@ -88,13 +56,15 @@ class Orra:
 
     @staticmethod
     def _compile(workflow, steps):
+        parts = ""
         for i in range(len(steps) - 1):
-            print(steps[i], steps[i + 1])
+            parts = f"{steps[i]} -> {steps[i + 1]}" if parts == "" else f"{parts} -> {steps[i + 1]}"
             workflow.add_edge(steps[i], steps[i + 1])
 
         if len(steps) > 1:
             workflow.set_entry_point(steps[0])
             workflow.add_edge(steps[-1], END)
 
+        print("compiling workflow steps:", parts)
         return workflow.compile()
 
