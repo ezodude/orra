@@ -14,15 +14,21 @@ app = Orra(
 @app.step
 def check_issues(state) -> Any:
     print('decorated check_issues')
-    activities.check_issues()
-    return state
+    result = activities.check_issues()
+    return {
+        **state,
+        "tracked_issues": result
+    }
 
 
 @app.step
 def research(state) -> Any:
-    print('decorated research')
-    activities.research()
-    return state
+    print('decorated research', state)
+    result = activities.research(state["tracked_issues"])
+    return {
+        **state,
+        "researched": result
+    }
 
 
 @app.step
@@ -34,6 +40,6 @@ def author_workarounds(state) -> Any:
 
 @app.step
 def resolve(state) -> Any:
-    print('decorated resolve')
+    print('decorated resolve', state)
     activities.resolve()
     return state
