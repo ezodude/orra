@@ -5,31 +5,35 @@ from orra import Orra
 
 app = Orra(
     state_def={
-        "tracked_issues": list[dict],
-        "researched": list[dict],
+        "tracked_issues": list[dict] | None,
+        "researched": list[dict] | None,
     }
 )
 
 
 @app.step
-def check_issues() -> Any:
+def check_issues(state) -> Any:
     print('decorated check_issues')
-    return activities.check_issues()
+    activities.check_issues()
+    return state
 
 
 @app.step
-def research() -> Any:
+def research(state) -> Any:
     print('decorated research')
-    return activities.research()
+    activities.research()
+    return state
 
 
 @app.step
-def author_workarounds() -> Any:
+def author_workarounds(state) -> Any:
     print('decorated author_workarounds')
-    return activities.author_workarounds()
+    activities.author_workarounds()
+    return state
 
 
 @app.step
-def resolve() -> Any:
+def resolve(state) -> Any:
     print('decorated resolve')
-    return activities.resolve()
+    activities.resolve()
+    return state
