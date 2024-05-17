@@ -1,7 +1,7 @@
 from pydoc import Doc
 from typing import Type, Any, TypedDict, Callable, Annotated
 
-from fastapi import FastAPI
+import fastapi
 from pydantic import BaseModel
 from langgraph.graph import StateGraph, END
 
@@ -23,12 +23,18 @@ def _create_response_model(typed_dict: Type[Any]) -> Type[BaseModel]:
     return Model
 
 
-class StepResponse(BaseModel):
-    name: str
-    description: str | None = None
+def print_pydantic_models(app):
+    for route in app.routes:
+        if hasattr(route, "endpoint"):
+            print(f"Route: {route.path}")
+            for param in route.endpoint.__annotations__.values():
+                if issubclass(param, BaseModel):
+                    print(f"  Pydantic model: {param.__name__}")
+                    for field_name, field_value in param.__annotations__.items():
+                        print(f"    Field: {field_name}, Type: {field_value}")
 
 
-class Orra(FastAPI):
+class Orra:
     def __init__(self, state_def=None, **extra: Annotated[
         Any,
         Doc(),
@@ -37,15 +43,25 @@ class Orra(FastAPI):
         if state_def is None:
             state_def = {}
 
-        self._StateDict = _create_typed_dict("StateDict", state_def)
-        self._workflow = StateGraph(self._StateDict)
+        self._steps_app = fastapi.FastAPI()
         self._steps = []
+        self._StateDict = _create_typed_dict("StateDict", state_def)
+        self._StepResponseModel = _create_response_model(self._StateDict)
+        self._workflow = StateGraph(self._StateDict)
         self._compiled_workflow = None
 
     def step(self, func: Callable) -> Callable:
         print(f"decorated with step: {func.__name__}")
         self._register(func)
-        return self.post(path=f"/{func.__name__}", response_model=_create_response_model(self._StateDict))(func)
+
+        response_model = self._StepResponseModel
+        # print(f"response_model: {response_model.model_fields}")
+
+        @self._steps_app.post(f"/{func.__name__}")
+        def endpoint_wrapper(v: response_model):
+            func(v.dict())
+
+        return func
 
     # def after(self, act: str) -> Callable:
     #     def decorator(func: Callable) -> Callable:
@@ -54,13 +70,17 @@ class Orra(FastAPI):
     #         return func
     #     return decorator
 
+    def step_server(self) -> Callable:
+        # print_pydantic_models(self._steps_app)
+        return self._steps_app
+
     def local(self) -> None:
         self._compiled_workflow = self._compile(self._workflow, self._steps)
         self._compiled_workflow.invoke({})
 
     def run(self) -> None:
         self._compiled_workflow = self._compile(self._workflow, self._steps)
-        self.post(path=f"/workflow", response_model=None)(self._compiled_workflow.invoke)({})
+        # self.post(path=f"/workflow", response_model=None)(self._compiled_workflow.invoke)({})
 
     def _register(self, func: Callable):
         self._workflow.add_node(func.__name__, func)

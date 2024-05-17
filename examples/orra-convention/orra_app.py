@@ -1,18 +1,19 @@
 from typing import Any
+from typing import Optional, List, Dict
 
 import activities
 from orra import Orra
 
 app = Orra(
     state_def={
-        "tracked_issues": list[dict] | None,
-        "researched": list[dict] | None,
+        "tracked_issues": Optional[List[Dict]],
+        "researched": Optional[List[Dict]],
     }
 )
 
 
 @app.step
-def check_issues(state) -> Any:
+def check_issues(state:dict) -> Any:
     print('decorated check_issues')
     result = activities.check_issues()
     return {
@@ -22,7 +23,7 @@ def check_issues(state) -> Any:
 
 
 @app.step
-def research(state) -> Any:
+def research(state:dict) -> Any:
     print('decorated research', state)
     result = activities.research(state["tracked_issues"])
     return {
@@ -32,14 +33,14 @@ def research(state) -> Any:
 
 
 @app.step
-def author_workarounds(state) -> Any:
+def author_workarounds(state:dict) -> Any:
     print('decorated author_workarounds')
     activities.author_workarounds()
     return state
 
 
 @app.step
-def resolve(state) -> Any:
+def resolve(state:dict) -> Any:
     print('decorated resolve', state)
     activities.resolve()
     return state
