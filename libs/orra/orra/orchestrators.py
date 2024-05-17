@@ -44,12 +44,8 @@ class Orra(FastAPI):
 
     def step(self, func: Callable) -> Callable:
         print(f"decorated with step: {func.__name__}")
-        self._orchestrate(func)
+        self._register(func)
         return self.post(path=f"/{func.__name__}", response_model=_create_response_model(self._StateDict))(func)
-
-    def _orchestrate(self, func: Callable):
-        self._workflow.add_node(func.__name__, func)
-        self._steps.append(func.__name__)
 
     # def after(self, act: str) -> Callable:
     #     def decorator(func: Callable) -> Callable:
@@ -59,23 +55,26 @@ class Orra(FastAPI):
     #     return decorator
 
     def local(self) -> None:
-        for i in range(len(self._steps) - 1):
-            print(self._steps[i], self._steps[i + 1])
-            self._workflow.add_edge(self._steps[i], self._steps[i + 1])
-
-        if len(self._steps) > 1:
-            self._workflow.set_entry_point(self._steps[0])
-            self._workflow.add_edge(self._steps[-1], END)
-
-        print(self._workflow.nodes)
-
-        self._compiled_workflow = self._workflow.compile()
+        self._compiled_workflow = self._compile(self._workflow, self._steps)
         self._compiled_workflow.invoke({})
 
     def run(self) -> None:
-        if len(self._steps) > 1:
-            self._workflow.add_edge(self._steps[-1], END)
-
-        self._compiled_workflow = self._workflow.compile()
+        self._compiled_workflow = self._compile(self._workflow, self._steps)
         self.post(path=f"/workflow", response_model=None)(self._compiled_workflow.invoke)({})
+
+    def _register(self, func: Callable):
+        self._workflow.add_node(func.__name__, func)
+        self._steps.append(func.__name__)
+
+    @staticmethod
+    def _compile(workflow, steps):
+        for i in range(len(steps) - 1):
+            print(steps[i], steps[i + 1])
+            workflow.add_edge(steps[i], steps[i + 1])
+
+        if len(steps) > 1:
+            workflow.set_entry_point(steps[0])
+            workflow.add_edge(steps[-1], END)
+
+        return workflow.compile()
 
