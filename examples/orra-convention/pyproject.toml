@@ -12,6 +12,7 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.12"
 orra = {path = "../../libs/orra", develop = true}
+orra_cli = {path = "../../libs/cli", develop = true}
 
 
 [tool.poetry.group.dev.dependencies]
