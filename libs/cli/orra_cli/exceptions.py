@@ -1,0 +1,2 @@
+class OrraCliException(Exception):
+    pass
