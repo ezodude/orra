@@ -3,7 +3,7 @@ from typing import Optional, List, Dict
 
 from orra import Orra
 
-import activities
+import steps
 
 app = Orra(
     schema={
@@ -16,7 +16,7 @@ app = Orra(
 @app.step
 def check_issues(state: dict) -> Any:
     print('decorated check_issues')
-    result = activities.check_issues()
+    result = steps.check_issues()
     return {
         **state,
         "tracked_issues": result
@@ -26,7 +26,7 @@ def check_issues(state: dict) -> Any:
 @app.step
 def research(state: dict) -> Any:
     print('decorated research', state)
-    result = activities.research(state["tracked_issues"])
+    result = steps.research(state["tracked_issues"])
     return {
         **state,
         "researched": result
@@ -36,12 +36,12 @@ def research(state: dict) -> Any:
 @app.step
 def author_workarounds(state: dict) -> Any:
     print('decorated author_workarounds')
-    activities.author_workarounds()
+    steps.author_workarounds()
     return state
 
 
 @app.step
 def resolve(state: dict) -> Any:
     print('decorated resolve', state)
-    activities.resolve()
+    steps.resolve()
     return state
