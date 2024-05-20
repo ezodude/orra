@@ -1,5 +1,17 @@
+from typing import Protocol
+
 from fastapi import FastAPI
 from pydantic import BaseModel
+
+
+class Printer(Protocol):
+    def print(self, message: str) -> None:
+        ...
+
+
+class NullPrinter:
+    def print(self, message: str) -> None:
+        pass
 
 
 def print_pydantic_models_from(app: FastAPI):

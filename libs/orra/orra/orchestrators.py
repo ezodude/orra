@@ -3,7 +3,7 @@ from typing import Any, Callable
 import fastapi
 from langgraph.graph import StateGraph, END
 
-from .printers import print_pydantic_models_from
+from .printers import Printer, NullPrinter
 from .typing_dynamic import create_typed_dict, create_response_model
 
 
@@ -36,14 +36,25 @@ class Orra:
     #         return func
     #     return decorator
 
-    def run(self) -> Callable:
+    def run(self, printer: Printer = NullPrinter()) -> Callable:
+        msg = "Compiling Orra application workflow..."
         self._compiled_workflow = self._compile(self._workflow, self._steps)
+        msg = f"{msg} Done!"
+
+        printer.print(msg)
+        printer.print("Prepared Orra application step endpoints...Done!")
+
+        msg = "Preparing Orra application workflow endpoint..."
 
         @self._steps_app.post(f"/workflow")
         async def wrap_workflow():
             self._compiled_workflow.invoke({})
 
-        print_pydantic_models_from(self._steps_app)
+        msg = f"{msg} Done!"
+        printer.print(msg)
+
+        # print_pydantic_models_from(self._steps_app)
+
         return self._steps_app
 
     def execute(self) -> None:
@@ -65,6 +76,5 @@ class Orra:
             workflow.set_entry_point(steps[0])
             workflow.add_edge(steps[-1], END)
 
-        print("compiling workflow steps:", parts)
+        # print("compiling workflow steps:", parts)
         return workflow.compile()
-
