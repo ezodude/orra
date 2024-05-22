@@ -46,26 +46,8 @@ def callback(
         ),
         ] = None, ) -> None:
     """
-    Orra - orra is great!
+    🪡   Orra - make your AI agents work better together!
     """
-
-
-# ✔ Building Encore application graph... Done!
-# ✔ Analyzing service topology... Done!
-# ✔ Creating PostgreSQL database cluster... Done!
-# ✔ Generating boilerplate code... Done!
-# ✔ Compiling application source code... Done!
-# ✔ Running database migrations... Done!
-# ✔ Starting Encore application... Done!
-#
-# Encore development server running!
-#
-# Your API is running at:     http://127.0.0.1:4000
-# Development Dashboard URL:  http://localhost:9400/w2ghg
-#
-# 3:57PM INF registered API endpoint endpoint=Shorten path=/url service=url
-# 3:57PM INF registered API endpoint endpoint=Get path=/url/:id service=url
-# 3:57PM INF listening for incoming HTTP requests
 
 
 @app.command()
