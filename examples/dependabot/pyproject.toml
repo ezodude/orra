@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "orra-convention"
+name = "dependabot"
 version = "0.1.0"
-description = "An example that illustrates the orra convention for setting up a workflow project."
+description = "A dependabot example project that uses agents to update dependencies.
 authors = []
 readme = "README.md"
 package-mode = false
