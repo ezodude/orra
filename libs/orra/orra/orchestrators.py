@@ -48,7 +48,13 @@ class Orra:
 
         @self._steps_app.post(f"/workflow")
         async def wrap_workflow():
-            self._compiled_workflow.invoke({})
+            for output in self._compiled_workflow.stream({}, stream_mode="updates"):
+                # stream() yields dictionaries with output keyed by node name
+                for key, value in output.items():
+                    print(f"Output from node '{key}':")
+                    print("---")
+                    print(value)
+            print("\n---\n")
 
         msg = f"{msg} Done!"
         printer.print(msg)

@@ -1,3 +1,3 @@
 
-def draft_prs():
-    print('draft_prs')
+def draft_issues():
+    return {}

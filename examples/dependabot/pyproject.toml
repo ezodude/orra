@@ -1,19 +1,20 @@
 [tool.poetry]
 name = "dependabot"
 version = "0.1.0"
-description = "A dependabot example project that uses agents to update dependencies.
+description = "A dependabot example project that uses agents to update dependencies."
 authors = []
 readme = "README.md"
 package-mode = false
 packages = [
-    { include = "activities" }
+    { include = "steps" }
 ]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.11,<4.0"
 orra = {path = "../../libs/orra", develop = true}
 orra_cli = {path = "../../libs/cli", develop = true}
-
+python-dotenv = "^1.0.1"
+gpt-researcher = "^0.5.3"
 
 [tool.poetry.group.dev.dependencies]
 uvicorn = {extras = ["standard"], version = "^0.29.0"}

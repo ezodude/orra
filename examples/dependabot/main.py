@@ -1,5 +1,10 @@
+import asyncio
 from typing import Any
 from typing import Optional, List, Dict
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from orra import Orra
 
@@ -7,26 +12,25 @@ import steps
 
 app = Orra(
     schema={
-        "tracked_issues": Optional[List[Dict]],
+        "dependencies": Optional[List[Dict]],
         "researched": Optional[List[Dict]],
+        "drafted": Optional[List[Dict]],
     }
 )
 
 
 @app.step
 def discover_dependencies(state: dict) -> Any:
-    print('decorated discover_dependencies')
     result = steps.discover_dependencies()
     return {
         **state,
-        "tracked_issues": result
+        "dependencies": result
     }
 
 
 @app.step
 def research_updates(state: dict) -> Any:
-    print('decorated research_updates', state)
-    result = steps.research_updates(state["tracked_issues"])
+    result = [asyncio.run(steps.research_updates(dependency)) for dependency in state['dependencies']]
     return {
         **state,
         "researched": result
@@ -34,14 +38,16 @@ def research_updates(state: dict) -> Any:
 
 
 @app.step
-def draft_prs(state: dict) -> Any:
-    print('decorated draft_prs')
-    steps.draft_prs()
-    return state
+def draft_issues(state: dict) -> Any:
+    result = steps.draft_issues()
+    return {
+        **state,
+        "drafted": result
+    }
 
 
 @app.step
-def submit_prs(state: dict) -> Any:
-    print('decorated submit_prs', state)
+def submit_issues(state: dict) -> Any:
+    print('decorated submit_issues', state)
     steps.submit_prs()
     return state

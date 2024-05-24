@@ -5,10 +5,8 @@ from logging import getLogger
 from pathlib import Path
 from typing import Union
 
-from rich import print
 from rich.padding import Padding
 from rich.panel import Panel
-from rich.syntax import Syntax
 from rich.tree import Tree
 
 from .exceptions import OrraCliException
@@ -76,21 +74,6 @@ def get_module_data_from_path(path: Path) -> ModuleData:
         if sub_path.is_dir():
             tree.add("[dim]🐍 __init__.py[/dim]")
 
-    title = "[b green]Python module file[/b green]"
-    if len(module_paths) > 1 or module_path.is_dir():
-        title = "[b green]Python package file structure[/b green]"
-
-    panel = Padding(
-        Panel(
-            root_tree,
-            title=title,
-            expand=False,
-            padding=(1, 2),
-        ),
-        1,
-    )
-    # print(panel)
-
     module_str = ".".join(p.stem for p in module_paths)
     logger.debug(f"Importing module [green]{module_str}[/green]")
 
@@ -120,6 +103,7 @@ def get_app_name(*, mod_data: ModuleData, app_name: Union[str, None] = None) -> 
                 f"Could not find app name {app_name} in {mod_data.module_import_str}"
             )
         app = getattr(mod, app_name)
+        # noinspection PyTypeChecker
         if not isinstance(app, Orra):
             raise OrraCliException(
                 f"The app name {app_name} in {mod_data.module_import_str} doesn't seem to be a Orra app"
@@ -128,10 +112,12 @@ def get_app_name(*, mod_data: ModuleData, app_name: Union[str, None] = None) -> 
     for preferred_name in ["app"]:
         if preferred_name in object_names_set:
             obj = getattr(mod, preferred_name)
+            # noinspection PyTypeChecker
             if isinstance(obj, Orra):
                 return preferred_name
     for name in object_names:
         obj = getattr(mod, name)
+        # noinspection PyTypeChecker
         if isinstance(obj, Orra):
             return name
     raise OrraCliException("Could not find Orra app in module")
@@ -153,20 +139,7 @@ def get_import_string(
     sys.path.insert(0, str(mod_data.extra_sys_path))
 
     use_app_name = get_app_name(mod_data=mod_data, app_name=app_name)
-    import_example = Syntax(
-        f"from {mod_data.module_import_str} import {use_app_name}", "python"
-    )
-    import_panel = Padding(
-        Panel(
-            import_example,
-            title="[b green]Importable Orra app[/b green]",
-            expand=False,
-            padding=(1, 2),
-        ),
-        1,
-    )
     logger.debug("Found importable Orra app")
-    # print(import_panel)
 
     import_string = f"{mod_data.module_import_str}:{use_app_name}"
     logger.debug(f"Using import string [b green]{import_string}[/b green]")
