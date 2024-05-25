@@ -10,7 +10,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<4.0"
+python = ">=3.11,<=3.13"
 orra = {path = "../../libs/orra", develop = true}
 orra_cli = {path = "../../libs/cli", develop = true}
 python-dotenv = "^1.0.1"
