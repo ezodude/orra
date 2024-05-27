@@ -1,1 +1,1 @@
-from .main import research_updates
+from .main import research_update

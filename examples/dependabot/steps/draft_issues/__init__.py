@@ -1,1 +1,1 @@
-from .main import draft_issues
+from .main import run_draft_issues
