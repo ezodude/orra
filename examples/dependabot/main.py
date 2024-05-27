@@ -49,5 +49,5 @@ def draft_issues(state: dict) -> Any:
 @app.step
 def submit_issues(state: dict) -> Any:
     print('decorated submit_issues', state)
-    steps.submit_prs()
+    steps.submit_issues()
     return state
