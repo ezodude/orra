@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
-fastapi = "^0.111.0"
+fastapi = {extras = ["slim"], version = "^0.111.0"}
 langgraph = "^0.0.49"
 
 
