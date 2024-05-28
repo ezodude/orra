@@ -106,6 +106,7 @@ def run_draft_issues(package_updates):
 
     crew = create_crew(llm, _format_package_updates(package_updates))
     full_output = crew.kickoff()
+    # noinspection PyTypeChecker
     raw = full_output['final_output']
     result = json.loads(raw)['draft_issues']
     return result
