@@ -53,7 +53,7 @@ Using the [**Orra CLI**](libs/cli) you can run the workflow (in the root of your
 - A dedicated workflow API endpoint.
 - A development server that runs the workflow.
 
-You can then interact with the API endpoints to run the workflow. Or run each step individually.
+You can then interact with the API endpoints to run the workflow (at `/workflow`), or run each step individually (e.g. `/workflow/step_name`).
 
 ```bash
 % poetry run python -m orra_cli run
