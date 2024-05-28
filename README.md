@@ -2,7 +2,7 @@
 
 🦸 Use an opinionated workflow to orchestrate and deploy agents rapidly - with batteries included!
 
-Orra helps you create reliable and deterministic multi-agent backed systems. It provides a simple and structured way to define multi-agent workflows, fine-tune and verify their reliability then deploy them.
+Orra helps you create reliable and deterministic multi-agent backed systems. It provides a simple and structured way to build multi-agent workflows, fine-tune and verify their reliability then deploy them.
 
 It consists of a **Backend SDK**, a **Local Development Environment** with Agent specific **workflow tooling**, **integrations** and a **Cloud Platform** for automating deployments.
 
