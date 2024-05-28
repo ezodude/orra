@@ -73,11 +73,13 @@ INFO:     Server running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 
 ## The Dependabot Example
 
-The Dependabot example is a simple Orra project that uses the Dependabot API to fetch a list of dependencies for a given repository. It then drafts GitHub issues for each dependency update.
+The [Dependabot example](examples/dependabot) is a simple Orra project that builds a multi-agent based Dependabot to fetch a list of dependencies for a given repository. It then drafts GitHub issues for each dependency update.
 
-You can find the code for the Dependabot example in the `examples/dependabot` directory.
+The core steps are:
+- `research_updates`: Researches updates for every discovered dependency requiring an update - using the [GPT Researcher Agent](https://github.com/assafelovic/gpt-researcher). 
+- `draft_issues`: Reviews the updates and drafts GitHub issues for each update - using custom [CrewAI](http://crewai.com/) Agents.
 
-It's a simple example that demonstrates how to use Orra to create a workflow.
+It showcases how Orra uses convention to wire up a multi-agent backed system **using a heterogeneous set of agents**.
 
 ## Why Orra?
 
