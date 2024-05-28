@@ -18,7 +18,7 @@ We're just getting started and are ironing out the details of a **Local Developm
 
 So far, we've settled a simple way to define a workflow.
 
-You create and Orra app, then decorate any function with an `app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
+You create an Orra app, then decorate any function with an `app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
 
 For example:
 
