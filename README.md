@@ -6,7 +6,7 @@ Orra helps you create reliable and deterministic multi-agent backed systems. It 
 
 It consists of a **Backend SDK**, a **Local Development Environment** with agent specific **workflow tooling**, **integrations** and a **Cloud Platform** for automating deployments.
 
-Orra enables seamless integration of purpose-built agents like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) alongside custom agents developed using frameworks such as [LangChain](https://python.langchain.com/en/latest/), [CrewAI](http://www.crewai.com/), and more, allowing you to wire them together into unified multi-agent workflows.
+Orra also seamlessly integrates purpose-built agents like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) with custom agents from [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI), and more **into unified multi-agent workflows**.
 
 ## In progress
 
@@ -77,7 +77,7 @@ The [Dependabot example](examples/dependabot) is a simple Orra project that buil
 
 The core steps are:
 - `research_updates`: Researches updates for every discovered dependency requiring an update - using the [GPT Researcher Agent](https://github.com/assafelovic/gpt-researcher). 
-- `draft_issues`: Reviews the updates and drafts GitHub issues for each update - using custom [CrewAI](http://crewai.com/) Agents.
+- `draft_issues`: Reviews the updates and drafts GitHub issues for each update - using custom [CrewAI](https://github.com/joaomdmoura/crewAI) Agents.
 
 It showcases how Orra uses convention to wire up a multi-agent backed system **using a heterogeneous set of agents**.
 
