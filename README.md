@@ -16,8 +16,6 @@ It works with purpose built Agents like [GPT Researcher](https://github.com/assa
 
 We're just getting started and are ironing out the details of a **Local Development Environment**.
 
-So far, we've settled a simple way to define a workflow.
-
 You create an Orra app, then decorate any function with an `app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
 
 For example:
@@ -69,6 +67,14 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Server running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
+
+## The Dependabot Example
+
+The Dependabot example is a simple Orra app that uses the Dependabot API to fetch a list of dependencies for a given repository. It then drafts a GitHub issues for dependency updates.
+
+You can find the code for the Dependabot example in the `examples/dependabot` directory.
+
+It's a simple example that demonstrates how to use Orra to create a workflow.
 
 ## Why Orra?
 
