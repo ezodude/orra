@@ -29,13 +29,6 @@ class Orra:
 
         return func
 
-    # def after(self, act: str) -> Callable:
-    #     def decorator(func: Callable) -> Callable:
-    #         print(f"decorated {func.__name__} with activity: {act}")
-    #         self._workflow = f"{self._workflow} | {func.__name__}"
-    #         return func
-    #     return decorator
-
     def run(self, printer: Printer = NullPrinter()) -> Callable:
         msg = "Compiling Orra application workflow..."
         self._compiled_workflow = self._compile(self._workflow, self._steps)
