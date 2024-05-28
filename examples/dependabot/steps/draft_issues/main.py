@@ -25,7 +25,7 @@ def create_crew(llm, package_updates):
         backstory="""You are a software updates reviewer responsible for analyzing software dependency version updates. 
         You have experience working with software libraries and updating dependencies to ensure that the software 
         is up-to-date and secure.""",
-        verbose=True,
+        verbose=False,
         memory=False,
         allow_delegation=False,
         cache=False,
@@ -39,7 +39,7 @@ def create_crew(llm, package_updates):
         with a team of developers to ensure that the project's dependencies are up-to-date and secure. You have 
         experience drafting GitHub issues that clearly describe what dependencies need to be updated and how.""",
         tools=[TavilySearchResults()],
-        verbose=True,
+        verbose=False,
         memory=False,
         allow_delegation=False,
         cache=False,
@@ -90,7 +90,7 @@ the package name, the drafted issue details and a label to categorize the issue.
         agents=[software_updates_reviewer, senior_developer_agent],
         tasks=[describe_updates, draft_issues],
         full_output=True,
-        verbose=2,
+        verbose=0,
     )
 
     return crew
@@ -123,5 +123,4 @@ def _format_package_updates(src):
         ]
         out.append("\n\n".join(details))
     result = "\n\n".join(out)
-    print(f'Formatted package updates:\n{result}')
     return result

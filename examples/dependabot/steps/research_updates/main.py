@@ -9,7 +9,7 @@ async def research_update(dependency: dict) -> dict:
     report_type = "research_report"
     sources = [dependency['pkg_repo'], dependency['git_repo']]
 
-    researcher = GPTResearcher(query=query, report_type=report_type, source_urls=sources)
+    researcher = GPTResearcher(query=query, report_type=report_type, source_urls=sources, verbose=False)
     await researcher.conduct_research()
     report = await researcher.write_report()
 
