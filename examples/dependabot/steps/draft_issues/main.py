@@ -1,3 +1,4 @@
+import json
 from textwrap import dedent
 
 from crewai import Agent, Task, Crew
@@ -76,12 +77,12 @@ information in separate sections. The sections are:
         
 You MUST create all drafts before sending your final answer.
         
-Your final answer MUST be a JSON list that includes objects formatted with the package name as the key 
-and the drafted issue as the value. Also, include a label for each draft issue to categorize the issue.
+Your final answer MUST be a JSON list that ONLY includes an entry for every reviewed package. Each entry will include 
+the package name, the drafted issue details and a label to categorize the issue.
             """),
         agent=senior_developer_agent,
-        expected_output="A JSON list that includes objects formatted with the package name as the key and the "
-                        "draft issue as the value.",
+        expected_output="A JSON list that ONLY includes an entry for every reviewed package. Each entry will include"
+                        "the package name, the drafted issue details and a label to categorize the issue.",
         output_json=DraftIssues,
     )
 
@@ -92,10 +93,7 @@ and the drafted issue as the value. Also, include a label for each draft issue t
         verbose=2,
     )
 
-    return {
-        "crew": crew,
-        "tasks": [draft_issues]
-    }
+    return crew
 
 
 def run_draft_issues(package_updates):
@@ -105,12 +103,11 @@ def run_draft_issues(package_updates):
     llm = ChatOpenAI(
         model="gpt-4o",
         temperature=0.9)
-    orchestration = create_crew(llm, _format_package_updates(package_updates))
-    crew = orchestration['crew']
-    draft_issues_task = orchestration['tasks'][0]
 
-    crew.kickoff()
-    result = draft_issues_task.output.result()['draft_issues']
+    crew = create_crew(llm, _format_package_updates(package_updates))
+    full_output = crew.kickoff()
+    raw = full_output['final_output']
+    result = json.loads(raw)['draft_issues']
     return result
 
 
