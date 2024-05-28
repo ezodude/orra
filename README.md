@@ -18,7 +18,7 @@ We're just getting started and are ironing out the details of a **Local Developm
 
 See the [Dependabot example](examples/dependabot/main.py) for an example of a working Orra project.
 
-Generally, use the [Orra SDK](libs/orra) to create an app instance, then decorate any function with an `@app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
+Generally, use the [Orra SDK](libs/orra) to create an app instance, then decorate any function with a `@app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
 
 For example:
 
