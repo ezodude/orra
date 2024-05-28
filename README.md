@@ -16,7 +16,9 @@ Orra consists of a **Backend SDK**, a **Local Development Environment** with age
 
 We're just getting started and are ironing out the details of a **Local Development Environment**.
 
-Use the [Orra SDK](libs/orra) to create an app instance, then decorate any function with an `app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
+See the [Dependabot example](examples/dependabot/main.py) for an example of a working Orra project.
+
+Generally, use the [Orra SDK](libs/orra) to create an app instance, then decorate any function with an `@app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
 
 For example:
 
@@ -70,16 +72,6 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Server running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
-
-## The Dependabot Example
-
-The [Dependabot example](examples/dependabot) is a simple Orra project that builds a multi-agent based Dependabot to fetch a list of dependencies for a given repository. It then drafts GitHub issues for each dependency update.
-
-The core steps are:
-- `research_updates`: Researches updates for every discovered dependency requiring an update - using the [GPT Researcher Agent](https://github.com/assafelovic/gpt-researcher). 
-- `draft_issues`: Reviews the updates and drafts GitHub issues for each update - using custom [CrewAI](https://github.com/joaomdmoura/crewAI) Agents.
-
-It showcases how Orra uses convention to wire up a multi-agent backed system **using a heterogeneous set of agents**.
 
 ## Why Orra?
 
