@@ -23,7 +23,7 @@ class Orra:
         self._register(func)
         response_model = self._StepResponseModel
 
-        @self._steps_app.post(f"/{func.__name__}")
+        @self._steps_app.post(f"/workflow/{func.__name__}")
         async def wrap_endpoint(v: response_model):
             return func(v.dict())
 
