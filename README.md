@@ -8,11 +8,11 @@ Including **unified multi-agent workflows**, that seamlessly integrate purpose-b
 
 Orra consists of a **Backend SDK**, a **Local Development Environment** with agent specific **workflow tooling**, **integrations** and a **Cloud Platform** for automating deployments.
 
-## In progress
+## In progress ⏳
 
 - [ ] Local Development Environment
 
-## We're just getting started
+## We're just getting started 🎬
 
 We're just getting started and are ironing out the details of a **Local Development Environment**.
 
@@ -71,7 +71,7 @@ INFO:     Application startup complete.
 INFO:     Server running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
 
-## The Dependabot Example
+## The Dependabot Example 🤖
 
 The [Dependabot example](examples/dependabot) is a simple Orra project that builds a multi-agent based Dependabot to fetch a list of dependencies for a given repository. It then drafts GitHub issues for each dependency update.
 
