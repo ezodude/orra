@@ -10,11 +10,13 @@ It works with purpose built Agents like [GPT Researcher](https://github.com/assa
 
 ## In progress
 
-- [] Local Development Environment
+- [ ] Local Development Environment
 
 ## We're just getting started
 
-We're just getting started and are ironing the details of a local development environment. So far, we've settled a simple way to define a workflow.
+We're just getting started and are ironing out the details of a **Local Development Environment**.
+
+So far, we've settled a simple way to define a workflow.
 
 You create and Orra app, then decorate any function with an `app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
 
