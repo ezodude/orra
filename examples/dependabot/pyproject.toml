@@ -17,9 +17,6 @@ python-dotenv = "^1.0.1"
 gpt-researcher = "^0.5.3"
 crewai = "^0.30.11"
 
-[tool.poetry.group.dev.dependencies]
-uvicorn = {extras = ["standard"], version = "^0.29.0"}
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
