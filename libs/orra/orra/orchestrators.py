@@ -25,7 +25,7 @@ class Orra:
 
         @self._steps_app.post(f"/{func.__name__}")
         async def wrap_endpoint(v: response_model):
-            func(v.dict())
+            return func(v.dict())
 
         return func
 
