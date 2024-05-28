@@ -6,7 +6,7 @@ Orra helps you create **reliable and deterministic multi-agent backed systems**.
 
 Including **unified multi-agent workflows**, that seamlessly integrate purpose-built agents like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) with custom agents from [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI), and more.
 
-Orra consists of a **Backend SDK**, a **Local Development Environment** with agent specific **workflow tooling**, **integrations** and a **Cloud Platform** for automating deployments.
+Orra consists of a **Backend SDK**, a **Local Development Environment** with agent specific **workflow tooling**, **integrations** (_soon_) and a **Cloud Platform** _(soon)_ for automating deployments.
 
 ## In progress
 
