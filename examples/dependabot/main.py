@@ -16,7 +16,8 @@ app = Orra(
         "researched": Optional[List[Dict]],
         "drafted": Optional[List[Dict]],
         "submitted": Optional[List[str]]
-    }
+    },
+    debug=True
 )
 
 
