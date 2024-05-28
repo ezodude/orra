@@ -49,8 +49,11 @@ def discover_dependencies(state: dict) -> Any:
 ```
 
 Using the [**Orra CLI**](libs/cli) you can run the workflow (in the root of your Orra project), this creates: 
-- A set of API endpoints for each step in the workflow
-- A dedicated workflow endpoint.
+- A set of API endpoints for each step in the workflow.
+- A dedicated workflow API endpoint.
+- A development server that runs the workflow.
+
+You can then interact with the API endpoints to run the workflow. Or run each step individually.
 
 ```bash
 % poetry run python -m orra_cli run
@@ -70,7 +73,7 @@ INFO:     Server running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 
 ## The Dependabot Example
 
-The Dependabot example is a simple Orra app that uses the Dependabot API to fetch a list of dependencies for a given repository. It then drafts a GitHub issues for dependency updates.
+The Dependabot example is a simple Orra project that uses the Dependabot API to fetch a list of dependencies for a given repository. It then drafts GitHub issues for each dependency update.
 
 You can find the code for the Dependabot example in the `examples/dependabot` directory.
 
