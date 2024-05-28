@@ -16,7 +16,7 @@ It works with purpose built Agents like [GPT Researcher](https://github.com/assa
 
 We're just getting started and are ironing out the details of a **Local Development Environment**.
 
-You create an Orra app, then decorate any function with an `app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
+Use the [Orra SDK](libs/orra) to create an app instance, then decorate any function with an `app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
 
 For example:
 
@@ -48,7 +48,7 @@ def discover_dependencies(state: dict) -> Any:
 # more steps
 ```
 
-Using the Orra CLI you can run the workflow (in the root of your Orra project), this creates: 
+Using the [**Orra CLI**](libs/cli) you can run the workflow (in the root of your Orra project), this creates: 
 - A set of API endpoints for each step in the workflow
 - A dedicated workflow endpoint.
 
