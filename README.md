@@ -15,6 +15,12 @@ with custom agents built
 with [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
 and more.
 
+## Why Orra?
+
+Orchestrating multi-agent LLM workflows is complex. Orra simplifies it by providing an open-source platform for
+reliable, repeatable agent orchestration. 🚀 No more gluing libraries or custom code for cost monitoring, fine-tuning,
+deployment, reliability checks, and agent vetting. Orra streamlines the entire process. ⚡️⚡️
+
 ## In progress
 
 - [ ] Local Development Environment
@@ -84,18 +90,3 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Server running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
-
-## Why Orra?
-
-The developer experience for orchestrating multi-agents for reliable and repeatable workflows in production is still
-lacking.
-
-Currently, a developer has to work close to the metal. They have to source and glue various libraries and tools for
-every project they create. Then revert into DevOPS mode to factor in cost monitoring, setting up any required
-prompt/model fine-tuning pipelines and finally deployment.
-
-Also, adding reliability/eval checks require custom code that varies depending on the frameworks used. Agent reuse is
-another hurdle, especially sourcing and vetting agents to ensure they work as advertised.
-
-Orra is here to take you to the next level. ⚡️⚡️
-
