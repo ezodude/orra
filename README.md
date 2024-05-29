@@ -27,7 +27,7 @@ We're still ironing out the details of our **Local Development Environment**.
 
 You can try out the latest by installing a local version of Orra.
 
-(See the [Dependabot example](examples/dependabot) for a detailed example of a working Orra project)
+(See the [Dependabot example](examples/dependabot) for a more detailed example that orchestrates real-world agents.)
 
 ## A quick start guide to set up and run an Orra project locally
 
