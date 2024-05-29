@@ -60,15 +60,17 @@ poetry add /path/to/repo/libs/cli
 touch main.py
 ```
 
-5. **Orchestrate your Agents** in the `main.py` file (see [example](examples/basics/basics/hello_world.py)).
+5. **Orchestrate your Agents**:
 
-6. Run your Orra project using the Orra CLI:
+Copy the content [this example](examples/basics/basics/hello_world.py) to your `main.py` file .
+
+6. **Run your Orra project using the Orra CLI**:
 
 ```bash 
 poetry run python -m orra_cli run
 ````
 
-7. **Your Orra project is now running**!
+7. _Your Orra project is now running!_
 
 ```bash
 orra-app % poetry run python -m orra_cli run
