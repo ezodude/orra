@@ -37,27 +37,27 @@ You can try out the latest by installing a local version of Orra.
 
 1. **Create a new Orra project**:
 
-```bash
+```shell
 poetry new orra-app
 cd orra-app
 ```
 
 2. **Install the Orra SDK and CLI locally from the cloned repository**:
 
-```bash
+```shell
 poetry add /path/to/repo/libs/orra
 poetry add /path/to/repo/libs/cli
 ```
 
 3. **Create a main file in the `orra-app` directory**, and copy in the content of [this example](examples/basics/basics/hello_world.py):
 
-```bash
+```shell
 touch main.py
 ```
 
 4. **Run your Orra project using the Orra CLI**:
 
-```bash 
+```shell 
 poetry run python -m orra_cli run
 ````
 
@@ -81,7 +81,7 @@ INFO:     Orra running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 
 6. **Execute your workflow** by sending a POST request to the `/workflow` endpoint:
 
-```bash
+```shell
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"source": null, "researched": null}' \ 
@@ -99,7 +99,7 @@ Outputs:
 
 7. **Execute individual steps** by sending a POST request to the `/workflow/step_name` endpoint (e.g. `/workflow/investigate`):
 
-```bash
+```shell
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"source": null, "researched": null}' \
