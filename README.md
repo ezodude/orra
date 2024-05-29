@@ -1,6 +1,6 @@
 # 🪡 orra
 
-🦸 Use an opinionated workflow to **orchestrate and deploy LLM powered Multi-Agent systems rapidly** - batteries
+🦸 Use an opinionated workflow to orchestrate and deploy LLM powered Multi-Agent systems rapidly - batteries
 included!
 
 Orra provides a **Python SDK** and a **Local Development Environment**. And soon, agentic workflow tooling,
