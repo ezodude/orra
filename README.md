@@ -61,7 +61,7 @@ touch main.py
 poetry run python -m orra_cli run
 ````
 
-5. _Your Orra project is now running!_
+5. **Your Orra project is now running**, and you can access it via HTTP endpoints! 🚀
 
 ```bash
 orra-app % poetry run python -m orra_cli run
@@ -78,8 +78,6 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Orra running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
-
-Your orchestrated inputs and agents are now accessible **via HTTP endpoints**. Ready for testing.
 
 6. **Execute your workflow** by sending a POST request to the `/workflow` endpoint:
 
