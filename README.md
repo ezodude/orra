@@ -49,13 +49,11 @@ poetry add /path/to/repo/libs/orra
 poetry add /path/to/repo/libs/cli
 ```
 
-3. **Create a main file in the `orra-app` directory**, adding [this example](examples/basics/basics/hello_world.py):
+3. **Create a main file in the `orra-app` directory**, and copy in the content of [this example](examples/basics/basics/hello_world.py):
 
 ```bash
 touch main.py
 ```
-
-Copy the content of [this example](examples/basics/basics/hello_world.py) to your `main.py` file .
 
 4. **Run your Orra project using the Orra CLI**:
 
