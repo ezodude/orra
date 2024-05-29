@@ -29,7 +29,7 @@ You can try out the latest by installing a local version of Orra.
 
 (See the [Dependabot example](examples/dependabot) for a more detailed example that orchestrates real-world agents.)
 
-## Quickstart: Local Installation and Hello World
+## Quickstart: Local installation and Hello World
 
 **Requirements**:
 - [Poetry installed](https://python-poetry.org/docs/#installation).
