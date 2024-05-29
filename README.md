@@ -1,64 +1,70 @@
 # 🪡 orra
 
-🦸 Use an opinionated workflow to orchestrate and deploy agents rapidly - with batteries included!
+🦸 Use an opinionated workflow to orchestrate and deploy LLM powered Multi-Agent systems rapidly - batteries
+included!
 
-Orra helps you create **reliable and deterministic multi-agent backed systems**. It provides a structured way to build workflows, fine-tune and verify their reliability then deploy them.
+Orra provides a **Python SDK** and a **Local Development Environment**. And soon, agentic workflow tooling,
+integrations and a Cloud Platform for automating deployments, to develop reliable and
+deterministic multi-agent systems.
 
-Including **unified multi-agent workflows**, that seamlessly integrate purpose-built agents like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) with custom agents from [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI), and more.
+## Bring your own agents
 
-Orra consists of a **Backend SDK**, a **Local Development Environment** with agent specific **workflow tooling** (_soon_), **integrations** (_soon_) and a **Cloud Platform** _(soon)_ for automating deployments.
+Using Orra, you can seamlessly integrate purpose-built agents
+e.g. [GPT Researcher](https://github.com/assafelovic/gpt-researcher)
+with custom agents built
+with [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
+and more.
 
-## In progress
+## Why Orra?
 
-- [ ] Local Development Environment
+Orchestrating multi-agent LLM workflows is complex. Orra simplifies it by providing an open-source platform for
+reliable, repeatable agent orchestration. 🚀 No more gluing libraries or custom code for cost monitoring, fine-tuning,
+deployment, reliability checks, and agent vetting. Orra streamlines the entire process. ⚡️⚡️
 
 ## We're just getting started
 
-We're just getting started and are ironing out the details of a **Local Development Environment**.
+We're still ironing out the details of our **Local Development Environment**.
 
-See the [Dependabot example](examples/dependabot/main.py) for an example of a working Orra project.
+You can try out the latest by installing a local version of Orra.
 
-Generally, use the [Orra SDK](libs/orra) to create an app instance, then decorate any function with a `@app.step` to create a workflow. The steps are then orchestrated by Orra to execute the workflow.
+(See the [Dependabot example](examples/dependabot) for a more detailed example that orchestrates real-world agents.)
 
-For example:
+## Quickstart: Local installation and Hello World
 
-```python
+**Requirements**:
+- [Poetry installed](https://python-poetry.org/docs/#installation).
+- Clone this repository.
 
-from orra import Orra
-import steps
+1. **Create a new Orra project**:
 
-app = Orra(
-    schema={
-        "dependencies": Optional[List[Dict]],
-        "researched": Optional[List[Dict]],
-        "drafted": Optional[List[Dict]],
-        "submitted": Optional[List[str]]
-    },
-    debug=True
-)
-
-
-@app.step
-def discover_dependencies(state: dict) -> Any:
-    result = steps.do_something()
-    return {
-        **state,
-        "dependencies": result
-    }
-...
-...
-# more steps
+```shell
+poetry new orra-app
+cd orra-app
 ```
 
-Using the [**Orra CLI**](libs/cli) you can run the workflow (in the root of your Orra project), this creates: 
-- A set of API endpoints for each step in the workflow.
-- A dedicated workflow API endpoint.
-- A development server that runs the workflow.
+2. **Install the Orra SDK and CLI locally from the cloned repository**:
 
-You can then interact with the API endpoints to run the workflow (at `/workflow`), or run each step individually (e.g. `/workflow/step_name`).
+```shell
+poetry add /path/to/repo/libs/orra
+poetry add /path/to/repo/libs/cli
+```
 
-```bash
-% poetry run python -m orra_cli run
+3. **Create a main file in the `orra-app` directory**, and copy in the content of [this example](examples/basics/basics/hello_world.py):
+
+```shell
+touch main.py
+```
+
+4. **Run your Orra project using the Orra CLI**:
+
+```shell 
+poetry run python -m orra_cli run
+````
+
+5. **Your Orra project is now running**, and you can access it via HTTP endpoints! 🚀
+
+```shell
+poetry run python -m orra_cli run
   ✔ Compiling Orra application workflow... Done!
   ✔ Prepared Orra application step endpoints...Done!
   ✔ Preparing Orra application workflow endpoint... Done!
@@ -67,19 +73,48 @@ You can then interact with the API endpoints to run the workflow (at `/workflow`
   Orra development server running!
   Your API is running at:     http://127.0.0.1:1430
 
-INFO:     Started server process [21403]
+INFO:     Started server process [33823]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     Server running on http://127.0.0.1:1430 (Press CTRL+C to quit)
+INFO:     Orra running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
 
-## Why Orra?
+6. **Execute your workflow** by sending a POST request to the `/workflow` endpoint:
 
-The developer experience for orchestrating multi-agents for reliable and repeatable workflows in production is still lacking.
+```shell
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"source": null, "researched": null}' \ 
+  http://127.0.0.1:1430/workflow
+```
 
-Currently, a developer has to work close to the metal. They have to source and glue various libraries and tools for every project they create. Then revert into DevOPS mode to factor in cost monitoring, setting up any required prompt/model fine-tuning pipelines and finally deployment.
+Outputs:
 
-Also, adding reliability/eval checks require custom code that varies depending on the frameworks used. Agent reuse is another hurdle, especially sourcing and vetting agents to ensure they work as advertised.
+```json
+{
+	"researched": "'hello world' is a common phrase used in programming to demonstrate the basic syntax of a programming language. It is believed to have originated from the book \"The C Programming Language\" by Brian Kernighan and Dennis Ritchie.",
+	"source": "hello world"
+}
+```
 
-Orra is here to take you to the next level. ⚡️⚡️
+7. **Execute individual steps** by sending a POST request to the `/workflow/step_name` endpoint (e.g. `/workflow/investigate`):
 
+```shell
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"source": null, "researched": null}' \
+  http://127.0.0.1:1430/workflow/investigate
+```
+
+Outputs:
+
+```json
+{
+	"researched": null,
+	"source": "hello world"
+}
+```
+
+This is a great way to test orchestrated steps individually.
+
+🎉 **You're all set!** 🎉

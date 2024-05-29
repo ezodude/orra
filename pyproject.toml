@@ -10,7 +10,6 @@ repository = "https://www.github.com/grro-xyz/orra"
 [tool.poetry.dependencies]
 python = ">=3.11,<=3.13"
 black = "^24.2.0"
-crewai = "^0.30.11"
 
 [build-system]
 requires = ["poetry-core"]
