@@ -42,35 +42,28 @@ poetry new orra-app
 cd orra-app
 ```
 
-2. **Install the Orra SDK locally from the cloned repository**:
+2. **Install the Orra SDK and CLI locally from the cloned repository**:
 
 ```bash
 poetry add /path/to/repo/libs/orra
-```
-
-3. **Install the Orra CLI locally from the cloned repository**:
-
-```bash
 poetry add /path/to/repo/libs/cli
 ```
 
-4. **Create the project's main file in the `orra-app` directory**:
+3. **Create a main file in the `orra-app` directory**, adding [this example](examples/basics/basics/hello_world.py):
 
 ```bash
 touch main.py
 ```
 
-5. **Orchestrate your Agents**:
+Copy the content of [this example](examples/basics/basics/hello_world.py) to your `main.py` file .
 
-Copy the content [this example](examples/basics/basics/hello_world.py) to your `main.py` file .
-
-6. **Run your Orra project using the Orra CLI**:
+4. **Run your Orra project using the Orra CLI**:
 
 ```bash 
 poetry run python -m orra_cli run
 ````
 
-7. _Your Orra project is now running!_
+5. _Your Orra project is now running!_
 
 ```bash
 orra-app % poetry run python -m orra_cli run
@@ -90,7 +83,7 @@ INFO:     Orra running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 
 Your orchestrated inputs and agents are now accessible **via HTTP endpoints**. Ready for testing.
 
-8. **Execute your workflow** by sending a POST request to the `/workflow` endpoint:
+6. **Execute your workflow** by sending a POST request to the `/workflow` endpoint:
 
 ```bash
 curl -X POST \
@@ -108,7 +101,7 @@ Outputs:
 }
 ```
 
-9. **Execute individual steps** by sending a POST request to the `/workflow/step_name` endpoint (e.g. `/workflow/investigate`):
+7. **Execute individual steps** by sending a POST request to the `/workflow/step_name` endpoint (e.g. `/workflow/investigate`):
 
 ```bash
 curl -X POST \
@@ -128,4 +121,4 @@ Outputs:
 
 This is a great way to test orchestrated steps individually.
 
-10. 🎉 **You're all set!** 🎉
+🎉 **You're all set!** 🎉
