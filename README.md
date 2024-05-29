@@ -63,7 +63,7 @@ poetry run python -m orra_cli run
 
 5. **Your Orra project is now running**, and you can access it via HTTP endpoints! 🚀
 
-```bash
+```shell
 poetry run python -m orra_cli run
   ✔ Compiling Orra application workflow... Done!
   ✔ Prepared Orra application step endpoints...Done!
