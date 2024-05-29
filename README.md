@@ -23,7 +23,7 @@ deployment, reliability checks, and agent vetting. Orra streamlines the entire p
 
 ## We're just getting started
 
-We're just getting started, and we're ironing out the details of our **Local Development Environment**.
+We're still ironing out the details of our **Local Development Environment**.
 
 You can try out the latest by installing a local version of Orra.
 
