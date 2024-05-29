@@ -3,8 +3,8 @@
 🦸 Use an opinionated workflow to **orchestrate and deploy LLM powered Multi-Agent systems rapidly** - batteries
 included!
 
-Orra provides a **Python SDK** and a **Local Development Environment**. And soon, agentic **workflow tooling**, 
-**integrations** and a **Cloud Platform for automating deployments**, to develop reliable and
+Orra provides a **Python SDK** and a **Local Development Environment**. And soon, agentic workflow tooling,
+integrations and a Cloud Platform for automating deployments, to develop reliable and
 deterministic multi-agent systems.
 
 ## Bring your own agents
