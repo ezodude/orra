@@ -35,32 +35,32 @@ You can try out the latest by installing a local version of Orra.
 - [Poetry installed](https://python-poetry.org/docs/#installation).
 - Clone this repository.
 
-1. Create a new Orra project:
+1. **Create a new Orra project**:
 
 ```bash
 poetry new orra-app
 cd orra-app
 ```
 
-2. Install the Orra SDK locally from the cloned repository:
+2. **Install the Orra SDK locally from the cloned repository**:
 
 ```bash
 poetry add /path/to/repo/libs/orra
 ```
 
-3. Install the Orra CLI locally from the cloned repository:
+3. **Install the Orra CLI locally from the cloned repository**:
 
 ```bash
 poetry add /path/to/repo/libs/cli
 ```
 
-4. Create the project's main file in the `orra-app` directory:
+4. **Create the project's main file in the `orra-app` directory**:
 
 ```bash
 touch main.py
 ```
 
-5. Orchestrate your Agents in the `main.py` file (see [example](examples/basics/basics/hello_world.py)).
+5. **Orchestrate your Agents** in the `main.py` file (see [example](examples/basics/basics/hello_world.py)).
 
 6. Run your Orra project using the Orra CLI:
 
@@ -68,7 +68,7 @@ touch main.py
 poetry run python -m orra_cli run
 ````
 
-7. Your Orra project is now running!
+7. **Your Orra project is now running**!
 
 ```bash
 orra-app % poetry run python -m orra_cli run
@@ -86,9 +86,9 @@ INFO:     Application startup complete.
 INFO:     Orra running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
 
-Your orchestrated inputs and agents are now accessible via HTTP endpoints. Ready for testing.
+Your orchestrated inputs and agents are now accessible **via HTTP endpoints**. Ready for testing.
 
-8. Kick off your workflow by sending a POST request to the `/workflow` endpoint:
+8. **Execute your workflow** by sending a POST request to the `/workflow` endpoint:
 
 ```bash
 curl -X POST \
@@ -106,7 +106,7 @@ Outputs:
 }
 ```
 
-9. Run individual steps by sending a POST request to the `/workflow/step_name` endpoint (e.g. `/workflow/investigate`):
+9. **Execute individual steps** by sending a POST request to the `/workflow/step_name` endpoint (e.g. `/workflow/investigate`):
 
 ```bash
 curl -X POST \
@@ -126,4 +126,4 @@ Outputs:
 
 This is a great way to test orchestrated steps individually.
 
-10. 🎉 You're all set! 🎉
+10. 🎉 **You're all set!** 🎉
