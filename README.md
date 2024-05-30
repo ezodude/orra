@@ -4,7 +4,7 @@
 included!
 
 Orra provides a **Python SDK** and a **Local Development Environment**. And
-soon, [agentic workflow tooling](#agentic-workflow-tooling) and a Cloud Platform for automating deployments, to
+soon, [agentic workflow tooling](#what-is-agentic-workflow-tooling) and a Cloud Platform for automating deployments, to
 develop reliable and deterministic multi-agent systems.
 
 ## Bring your own agents
@@ -122,9 +122,9 @@ This is a great way to test orchestrated steps individually.
 
 🎉 **You're all set!** 🎉
 
-## Agentic workflow tooling
+## What is agentic workflow tooling
 
-Tooling that enables reliable, repeatable execution of complex multi-agent workflows by:
+It is tooling that enables reliable, repeatable execution of complex multi-agent workflows by:
 
 - Standardizing agent flow control.
 - Enhancing tool prompting via integrated LLM fine-tuning.
