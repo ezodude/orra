@@ -3,7 +3,7 @@
 🦸 Use an opinionated workflow to orchestrate and deploy LLM powered Multi-Agent systems rapidly - batteries
 included!
 
-Orra provides a **Python SDK** and a **Local Development Environment**. And soon, agentic workflow tooling,
+Orra provides a **Python SDK** and a **Local Development Environment**. And soon, [agentic workflow tooling](#what-is-agentic-workflow-tooling),
 integrations and a Cloud Platform for automating deployments, to develop reliable and
 deterministic multi-agent systems.
 
@@ -32,6 +32,7 @@ You can try out the latest by installing a local version of Orra.
 ## Quickstart: Local installation and Hello World
 
 **Requirements**:
+
 - [Poetry installed](https://python-poetry.org/docs/#installation).
 - Clone this repository.
 
@@ -49,7 +50,8 @@ poetry add /path/to/repo/libs/orra
 poetry add /path/to/repo/libs/cli
 ```
 
-3. **Create a main file in the `orra-app` directory**, and copy in the content of [this example](examples/basics/basics/hello_world.py):
+3. **Create a main file in the `orra-app` directory**, and copy in the content
+   of [this example](examples/basics/basics/hello_world.py):
 
 ```shell
 touch main.py
@@ -97,7 +99,8 @@ Outputs:
 }
 ```
 
-7. **Execute individual steps** by sending a POST request to the `/workflow/step_name` endpoint (e.g. `/workflow/investigate`):
+7. **Execute individual steps** by sending a POST request to the `/workflow/step_name` endpoint (
+   e.g. `/workflow/investigate`):
 
 ```shell
 curl -X POST \
@@ -118,3 +121,13 @@ Outputs:
 This is a great way to test orchestrated steps individually.
 
 🎉 **You're all set!** 🎉
+
+## What is agentic workflow tooling?
+
+This is a set of tools that ensure the reliability and repeatability of your multi-agent systems. Amongst other things,
+it includes:
+
+- Standardised Agent flow control.
+- Fine-tuning LLM models for better tool invocation prompting.
+- Agent results evaluation.
+- Cost monitoring across all agent LLM and tool calls
