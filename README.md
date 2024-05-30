@@ -3,9 +3,9 @@
 🦸 Use an opinionated workflow to orchestrate and deploy LLM powered Multi-Agent systems rapidly - batteries
 included!
 
-Orra provides a **Python SDK** and a **Local Development Environment**. And soon, [agentic workflow tooling](#what-is-agentic-workflow-tooling),
-integrations and a Cloud Platform for automating deployments, to develop reliable and
-deterministic multi-agent systems.
+Orra provides a **Python SDK** and a **Local Development Environment**. And
+soon, [agentic workflow tooling](#agentic-workflow-tooling) and a Cloud Platform for automating deployments, to
+develop reliable and deterministic multi-agent systems.
 
 ## Bring your own agents
 
@@ -122,12 +122,12 @@ This is a great way to test orchestrated steps individually.
 
 🎉 **You're all set!** 🎉
 
-## What is agentic workflow tooling?
+## Agentic workflow tooling
 
-This is a set of tools that ensure the reliability and repeatability of your multi-agent systems. Amongst other things,
-it includes:
+Tooling that enables reliable, repeatable execution of complex multi-agent workflows by:
 
-- Standardised Agent flow control.
-- Fine-tuning LLM models for better tool invocation prompting.
-- Agent results evaluation.
-- Cost monitoring across all agent LLM and tool calls
+- Standardizing agent flow control.
+- Enhancing tool prompting via integrated LLM fine-tuning.
+- Evaluating agent outputs.
+- Monitoring costs across LLMs and tools.
+- Integrating pre-built and custom tools/APIs.
