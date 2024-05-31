@@ -71,7 +71,6 @@ curl -X POST \
 ```
 
 > **Note**:
-> 
 > Every step requires a different payload to execute successfully.
 > E.g. `research_updates` requires a list of dependencies to research, `draft_issues` requires a list of researched
 > dependencies to draft issues for, etc.
