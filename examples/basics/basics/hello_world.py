@@ -6,9 +6,10 @@ from orra import Orra
 # along with any data sources and sinks.
 
 # Orchestration is performed by a series of steps. Steps are orchestrated
-# and later executed in the order they are defined. (Different sequencing will be supported in the future)
+# and later executed in the order they are defined.
+# (Different sequencing will be supported in the future)
 
-# All steps share a common state. The schema defines the structure of the
+# All steps share state. The schema defines the structure of the
 # state object that will be passed between steps.
 app = Orra(
     schema={
