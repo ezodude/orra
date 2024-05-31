@@ -60,7 +60,7 @@ curl -X POST \
   http://127.0.0.1:1430/workflow
 ```
 
-7. Execute individual Dependabot steps by sending a POST request to the `/workflow/step_name` endpoint. 
+7. Execute individual Dependabot steps by sending a POST request to the `/workflow/step_name` endpoint.
    E.g. to execute the `discover_dependencies` step, run the following command:
 
 ```shell
@@ -70,5 +70,8 @@ curl -X POST \
   http://127.0.0.1:1430/workflow/discover_dependencies
 ```
 
-**NOTE**: Every step requires a different payload to execute successfully. E.g. `research_updates` requires a list of
-dependencies to research, `draft_issues` requires a list of researched dependencies to draft issues for, etc.
+> **Note** 
+> Every step requires a different payload to execute successfully.
+> E.g. `research_updates` requires a list of dependencies to research, `draft_issues` requires a list of researched
+> dependencies to draft issues for, etc.
+
