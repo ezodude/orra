@@ -1,25 +1,40 @@
 # 🪡 orra
 
-🦸 Use an opinionated workflow to orchestrate and deploy LLM powered Multi-Agent systems rapidly - batteries
-included!
+🦸 Instantly orchestrate multi-agent workflows as services with Orra.
 
-Orra provides a **Python SDK** and a **Local Development Environment**. And
-soon, [agentic workflow tooling](#what-is-agentic-workflow-tooling) and a Cloud Platform for automating deployments, to
-develop reliable and deterministic multi-agent systems.
-
-## Bring your own agents
-
-Using Orra, you can seamlessly integrate purpose-built agents
-e.g. [GPT Researcher](https://github.com/assafelovic/gpt-researcher)
-with custom agents built
-with [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
-and more.
+Orra's **Python SDK** and **Local Development Environment** enable agent-based service workflows with deployments,
+and [workflow enhancements](#workflow-enhancements-coming-soon). This makes multi-agent orchestrations work seamlessly
+in production.
 
 ## Why Orra?
 
-Orchestrating multi-agent LLM workflows is complex. Orra simplifies it by providing an open-source platform for
-reliable, repeatable agent orchestration. 🚀 No more gluing libraries or custom code for cost monitoring, fine-tuning,
-deployment, reliability checks, and agent vetting. Orra streamlines the entire process. ⚡️⚡️
+You've got a good agent workflow up and running. But you want to run it with a smaller LLM model for cost savings. Or,
+you want to ensure the quality of the outputs. Or, maybe you want to hit the ground running by plugging in some
+pre-built agents straight away.
+
+That's where Orra comes in. 🚀
+
+Built on [LangGraph's](https://github.com/langchain-ai/langgraph/) powerful Agent runtime. Orra is focused on making it
+super simple to deploy your agents as services and get them production-ready. We take care of all the complex,
+behind-the-scenes stuff, so you can concentrate on creating awesome user experiences. ⚡️⚡️
+
+## Mix and match agents
+
+Orra allows you to combine any agents - including off-the-shelf ones
+like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) with custom agents built with
+[LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
+and more.
+
+## Workflow enhancements (in the works)
+
+Orra bakes in enhancements to enable reliable, repeatable execution of complex multi agent-based service workflows by:
+
+- Offering pre-built data and API integrations as part of the SDK.
+- Standardizing flow control between agent-based services.
+- Enhancing tool prompting via integrated LLM fine-tuning.
+- Evaluating agent-service outputs to ensure correctness and quality.
+- Monitoring costs across LLMs and tools.
+- Offering pre-built open-source agents to get you up and running fast.
 
 ## We're just getting started
 
@@ -27,9 +42,36 @@ We're still ironing out the details of our **Local Development Environment**.
 
 You can try out the latest by installing a local version of Orra.
 
-(See the [Dependabot example](examples/dependabot) for a more detailed example that orchestrates real-world agents.)
+(Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent-based service
+workflow)
 
-## Quickstart: Local installation and Hello World
+### What does Orra look like?
+
+It just takes a few lines of code to orchestrate a service-based workflow using Orra:
+
+```python
+from typing import Optional, Any
+from orra import Orra
+
+app = Orra(schema={"source": Optional[str], "researched": Optional[str]})
+
+
+@app.step
+def investigate(state: dict) -> Any:
+    return {**state, "source": "hello world"}
+
+
+@app.step
+def research_topic(state: dict) -> Any:
+    result = {}  # Call your agent here
+    return {**state, "researched": result}
+
+# **** That's it! You've orchestrated your first service-based workflow using Orra. ****
+```
+
+### Try Orra locally
+
+This is a basic Hello World example to get you familiar with Orra.
 
 **Requirements**:
 
@@ -81,7 +123,7 @@ INFO:     Application startup complete.
 INFO:     Orra running on http://127.0.0.1:1430 (Press CTRL+C to quit)
 ```
 
-6. **Execute your workflow** by sending a POST request to the `/workflow` endpoint:
+6. **Execute your workflow as a service** by sending a POST request to the `/workflow` endpoint:
 
 ```shell
 curl -X POST \
@@ -122,12 +164,3 @@ This is a great way to test orchestrated steps individually.
 
 🎉 **You're all set!** 🎉
 
-## What is agentic workflow tooling
-
-It is tooling that enables reliable, repeatable execution of complex multi-agent workflows by:
-
-- Standardizing agent flow control.
-- Enhancing tool prompting via integrated LLM fine-tuning.
-- Evaluating agent outputs.
-- Monitoring costs across LLMs and tools.
-- Integrating pre-built and custom tools/APIs.

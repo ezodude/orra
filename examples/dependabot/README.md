@@ -1,19 +1,19 @@
 # Dependabot Example
 
-This project simulates a Dependabot-like agent system built on Orra to draft GitHub issues for outdated dependencies.
+This project simulates a Dependabot-like agent system orchestrated as a service-based workflow using Orra. It drafts
+GitHub issues for outdated dependencies.
 
 ## How it works
 
 The project's workflow is orchestrated as steps in [main.py](main.py) file. The file is well documented and
-showcases how Orra uses convention to wire up a multi-agent backed system.
+showcases how Orra uses convention to wire up a multi-agent backed system as services.
 
 Each orchestrated step is a function that can be a simple Python function or a more complex Agent.
 
 ## Agent steps
 
 - [research_updates](steps/research_updates/main.py): Researches updates for every discovered dependency requiring an
-  update - using
-  the [GPT Researcher Agent](https://github.com/assafelovic/gpt-researcher).
+  update - using the [GPT Researcher Agent](https://github.com/assafelovic/gpt-researcher).
 
 - [draft_issues](steps/draft_issues/main.py): Reviews the updates and drafts GitHub issues for each update - using
   custom [CrewAI](https://github.com/joaomdmoura/crewAI) Agents.
@@ -51,6 +51,8 @@ cp .env.example .env
 poetry run python -m orra_cli run
 ```
 
+The steps are now orchestrated in a service-based workflow and can be executed via HTTP endpoints.
+
 4. Execute the Dependabot by sending a POST request to the `/workflow` endpoint:
 
 ```shell
@@ -72,7 +74,7 @@ curl -X POST \
 
 > **Note**:
 > Every step requires the correct payload to execute successfully.
-> 
+>
 > For instance:
 > - `research_updates` requires a list of dependencies to research.
 > - `draft_issues` requires a list of researched dependencies to draft issues for, etc.

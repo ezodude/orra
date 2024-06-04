@@ -10,13 +10,13 @@ from orra import Orra
 
 import steps
 
-# Initialise an Orra app to orchestrate the Dependabot workflow.
+# Initialise an Orra app to orchestrate the Dependabot as a service-based workflow.
 
 # The workflow is made up of a series of steps that are orchestrated
 # and later executed **in the order they are defined**.
 # The `@app.step` decorator is used to define a step.
 
-# All steps share state. Orra requires you to declare the schema use by the state object.
+# All steps share state. Orra requires you to declare the schema used by the state object.
 # This schema validates the state object and provides type hints to the steps.
 # Every step must return a new state object.
 app = Orra(
