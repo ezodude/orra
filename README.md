@@ -25,7 +25,7 @@ like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) with custom
 [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
 and more.
 
-## Workflow enhancements (coming soon)
+## Workflow enhancements (in the works)
 
 Orra bakes in enhancements to enable reliable, repeatable execution of complex multi agent-based service workflows by:
 
