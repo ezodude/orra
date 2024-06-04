@@ -57,13 +57,15 @@ def investigate(state: dict) -> Any:
 
 @app.step
 def research_topic(state: dict) -> Any:
-   result = research_topic_using_agent(state['source'])
+   result = {} # Call your agent here
    return { **state, "researched": result }
 
 # **** That's it! You've orchestrated your first service-based workflow using Orra. ****
 ```
 
-## Quickstart: Local installation and Hello World
+### Try Orra locally 
+
+This is a basic Hello World example to get you familiar with Orra.
 
 **Requirements**:
 
