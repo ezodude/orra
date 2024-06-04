@@ -13,6 +13,14 @@ You've built your agents, but they need a few tweaks before they're ready for pr
 Orra helps deploy your agents as services. It takes care of all the heavy lifting, so you can just focus on building and
 improving your agents. ⚡️⚡️
 
+## Mix and match agents
+
+Seamlessly integrate any agents in a services based workflow. You can wire purpose-built agents on the web,
+e.g. [GPT Researcher](https://github.com/assafelovic/gpt-researcher)
+with custom agents built
+with [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
+and more.
+
 ## Workflow enhancements (coming soon)
 
 Orra bakes in enhancements to enable reliable, repeatable execution of complex multi agent-based service workflows by:
@@ -24,14 +32,6 @@ Orra bakes in enhancements to enable reliable, repeatable execution of complex m
 - Monitoring costs across LLMs and tools.
 - Offering pre-built open-source agents to get you up and running fast.
 
-## Mix and match agents
-
-Seamlessly integrate any agents in a services based workflow. You can wire purpose-built agents on the web,
-e.g. [GPT Researcher](https://github.com/assafelovic/gpt-researcher)
-with custom agents built
-with [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
-and more.
-
 ## We're just getting started
 
 We're still ironing out the details of our **Local Development Environment**.
@@ -41,7 +41,7 @@ You can try out the latest by installing a local version of Orra.
 (Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent-based service
 workflow)
 
-### A workflow example
+### What does Orra look like?
 
 It just takes a few lines of code to orchestrate a service-based workflow using Orra:
 
