@@ -4,25 +4,25 @@
 
 Orra's **Python SDK** and **Local Development Environment** enable agent-based service workflows with deployments,
 and [workflow enhancements](#workflow-enhancements-coming-soon). This makes multi-agent orchestrations work seamlessly
-in
-production.
+in production.
 
 ## Why Orra?
 
-You've got a solid agent workflow up and running, but it needs a few tweaks before you can ship it to production. Or
-maybe you want to hit the ground running by plugging in some pre-built agents straight away.
+You've got a good agent workflow up and running. But you want to run it with a smaller LLM model for cost savings. Or,
+you want to ensure the quality of the outputs. Or, maybe you want to hit the ground running by plugging in some
+pre-built agents straight away.
 
 That's where Orra comes in. 🚀
 
-Orra makes it stupid-simple to deploy your agents as services and get them production-ready. We handle all the boring,
-complex stuff, so you can focus on building kick-ass experiences for your users.
+Built on [LangGraph's](https://github.com/langchain-ai/langgraph/) powerful Agent runtime. Orra is focused on making it
+super simple to deploy your agents as services and get them production-ready. We take care of all the complex,
+behind-the-scenes stuff, so you can concentrate on creating awesome user experiences. ⚡️⚡️
 
 ## Mix and match agents
 
-Seamlessly integrate any agents in a services based workflow. You can wire purpose-built agents on the web,
-e.g. [GPT Researcher](https://github.com/assafelovic/gpt-researcher)
-with custom agents built
-with [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
+Orra allows you to combine any agents - including off-the-shelf ones
+like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) with custom agents built with
+[LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
 and more.
 
 ## Workflow enhancements (coming soon)
