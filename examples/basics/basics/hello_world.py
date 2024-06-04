@@ -50,4 +50,4 @@ def research_topic(state: dict) -> Any:
     }
 
 
-# **** That's it! You've orchestrated your first workflow using Orra. ****
+# **** That's it! You've orchestrated your first service-based workflow using Orra. ****
