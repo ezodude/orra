@@ -3,15 +3,19 @@
 🦸 Instantly orchestrate multi-agent workflows as services with Orra.
 
 Orra's **Python SDK** and **Local Development Environment** enable agent-based service workflows with deployments,
-and [workflow enhancements](#workflow-enhancements-coming-soon). This makes multi-agent orchestrations work seamlessly in
+and [workflow enhancements](#workflow-enhancements-coming-soon). This makes multi-agent orchestrations work seamlessly
+in
 production.
 
 ## Why Orra?
 
-You've built your agents, but they need a few tweaks before they're ready for production. This is where Orra comes in.🚀
+You've got a solid agent workflow up and running, but it needs a few tweaks before you can ship it to production. Or
+maybe you want to hit the ground running by plugging in some pre-built agents straight away.
 
-Orra helps deploy your agents as services. It takes care of all the heavy lifting, so you can just focus on building and
-improving your agents. ⚡️⚡️
+That's where Orra comes in. 🚀
+
+Orra makes it stupid-simple to deploy your agents as services and get them production-ready. We handle all the boring,
+complex stuff, so you can focus on building kick-ass experiences for your users.
 
 ## Mix and match agents
 
@@ -49,21 +53,23 @@ It just takes a few lines of code to orchestrate a service-based workflow using 
 from typing import Optional, Any
 from orra import Orra
 
-app = Orra(schema={ "source": Optional[str], "researched": Optional[str]})
+app = Orra(schema={"source": Optional[str], "researched": Optional[str]})
+
 
 @app.step
 def investigate(state: dict) -> Any:
-    return { **state, "source": "hello world"}
+    return {**state, "source": "hello world"}
+
 
 @app.step
 def research_topic(state: dict) -> Any:
-   result = {} # Call your agent here
-   return { **state, "researched": result }
+    result = {}  # Call your agent here
+    return {**state, "researched": result}
 
 # **** That's it! You've orchestrated your first service-based workflow using Orra. ****
 ```
 
-### Try Orra locally 
+### Try Orra locally
 
 This is a basic Hello World example to get you familiar with Orra.
 
