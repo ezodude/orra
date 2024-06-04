@@ -3,7 +3,7 @@
 🦸 Instantly orchestrate multi-agent workflows as services with Orra.
 
 Orra's **Python SDK** and **Local Development Environment** enable agent-based service workflows with deployments,
-and [workflow enhancements](#workflow-enhancements). This makes multi-agent orchestrations work seamlessly in
+and [workflow enhancements](#workflow-enhancements-coming-soon). This makes multi-agent orchestrations work seamlessly in
 production.
 
 ## Why Orra?
@@ -13,7 +13,7 @@ You've built your agents, but they need a few tweaks before they're ready for pr
 Orra helps deploy your agents as services. It takes care of all the heavy lifting, so you can just focus on building and
 improving your agents. ⚡️⚡️
 
-## Workflow enhancements
+## Workflow enhancements (coming soon)
 
 Orra bakes in enhancements to enable reliable, repeatable execution of complex multi agent-based service workflows by:
 
@@ -39,7 +39,7 @@ We're still ironing out the details of our **Local Development Environment**.
 You can try out the latest by installing a local version of Orra.
 
 (Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent-based service
-workflow.)
+workflow)
 
 ### A workflow example
 
