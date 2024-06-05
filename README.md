@@ -2,13 +2,13 @@
 
 🦸 Instantly orchestrate multi-agent workflows as services with Orra.
 
-Orra's **Python SDK** and **Local Development Environment** enable agent-based service workflows with deployments,
+Orra's **Python SDK** and **Local Development Environment** enable agent service-based workflows with deployments,
 and [workflow enhancements](#workflow-enhancements-in-the-works). This makes multi-agent orchestrations work seamlessly
 in production.
 
 ## Why Orra?
 
-You've got a good agent workflow up and running. But you want to run it with a smaller LLM model for cost savings. Or,
+You've got a base agent workflow up and running. But you want to ship it with a smaller LLM model for cost savings. Or,
 you want to ensure the quality of the outputs. Or, maybe you want to hit the ground running by plugging in some
 pre-built agents straight away.
 
@@ -27,10 +27,10 @@ and more.
 
 ## Workflow enhancements (in the works)
 
-Orra bakes in enhancements to enable reliable, repeatable execution of complex multi agent-based service workflows by:
+Orra bakes in enhancements to enable reliable, repeatable execution of complex multi agent service-based workflows by:
 
 - Offering pre-built data and API integrations as part of the SDK.
-- Standardizing flow control between agent-based services.
+- Standardizing flow control between agent services.
 - Enhancing tool prompting via integrated LLM fine-tuning.
 - Evaluating agent-service outputs to ensure correctness and quality.
 - Monitoring costs across LLMs and tools.
@@ -42,7 +42,7 @@ We're still ironing out the details of our **Local Development Environment**.
 
 You can try out the latest by installing a local version of Orra.
 
-(Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent-based service
+(Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent service-based
 workflow)
 
 ### What does Orra look like?
@@ -66,7 +66,7 @@ def research_topic(state: dict) -> Any:
     result = {}  # Call your agent here
     return {**state, "researched": result}
 
-# **** That's it! You've orchestrated your first service-based workflow using Orra. ****
+# **** That's it! You now have a `/workflow` endpoint plus an endpoint for each step. ****
 ```
 
 ### Try Orra locally
