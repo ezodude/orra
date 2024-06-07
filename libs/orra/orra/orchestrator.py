@@ -11,7 +11,7 @@ from .typing_dynamic import create_typed_dict, create_response_model
 
 
 class Orra:
-    def __init__(self, schema: dict[str, Any] = None, debug: bool = False):
+    def __init__(self, schema: dict[str, Any] = None):
         if schema is None:
             schema = {}
 
@@ -26,7 +26,6 @@ class Orra:
         self._StepResponseModel = create_response_model(self._StateDict)
         self._workflow = StateGraph(self._StateDict)
         self._compiled_workflow = None
-        self._debug = debug
 
     def step(self, func: Callable) -> Callable:
         self._register(func)
@@ -41,12 +40,15 @@ class Orra:
 
         return func
 
-    def run(self, printer: Printer = NullPrinter()) -> Callable:
+    def run(self, printer: Printer = NullPrinter(), debug: bool = False) -> Callable:
+        if debug:
+            printer.print(f"Initialising \[debug] mode...Done!")
+
         msg = "Compiling Orra application workflow..."
         self._compiled_workflow = self._compile(self._workflow, self._steps)
         msg = f"{msg} Done!"
-
         printer.print(msg)
+
         printer.print("Prepared Orra application step endpoints...Done!")
 
         msg = "Preparing Orra application workflow endpoint..."
@@ -54,7 +56,7 @@ class Orra:
 
         @self._steps_app.post(f"/workflow")
         async def wrap_workflow(v: response_model):
-            return self._compiled_workflow.invoke(v.dict(), debug=self._debug)
+            return self._compiled_workflow.invoke(v.dict(), debug=debug)
 
         msg = f"{msg} Done!"
         printer.print(msg)
