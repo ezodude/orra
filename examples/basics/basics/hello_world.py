@@ -15,8 +15,7 @@ app = Orra(
     schema={
         "source": Optional[str],
         "researched": Optional[str]
-    },
-    debug=True
+    }
 )
 
 

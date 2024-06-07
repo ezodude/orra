@@ -51,7 +51,7 @@ def callback(
 
 
 @app.command()
-def run() -> None:
+def run(debug: bool = typer.Option(False, "--debug", help="Activate debug mode.")) -> None:
     host = "127.0.0.1"
     port = 1430
 
@@ -66,7 +66,7 @@ def run() -> None:
 
     module = importlib.import_module(parts[0])
     orra_app = getattr(module, parts[1])
-    server_factory = orra_app.run(printer=printer)
+    server_factory = orra_app.run(printer=printer, debug=debug)
 
     printer.print("Starting Orra application... Done!")
 
