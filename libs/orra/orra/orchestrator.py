@@ -1,9 +1,12 @@
+import asyncio
+import inspect
 from typing import Any, Callable
 
 import fastapi
 from langgraph.graph import StateGraph, END
 
 from .printers import Printer, NullPrinter
+from .signals import KeyboardInterruptMiddleware, CancelledErrorMiddleware
 from .typing_dynamic import create_typed_dict, create_response_model
 
 
@@ -13,6 +16,11 @@ class Orra:
             schema = {}
 
         self._steps_app = fastapi.FastAPI()
+        # noinspection PyTypeChecker
+        self._steps_app.add_middleware(KeyboardInterruptMiddleware)
+        # noinspection PyTypeChecker
+        self._steps_app.add_middleware(CancelledErrorMiddleware)
+
         self._steps = []
         self._StateDict = create_typed_dict("StateDict", schema)
         self._StepResponseModel = create_response_model(self._StateDict)
@@ -26,7 +34,10 @@ class Orra:
 
         @self._steps_app.post(f"/workflow/{func.__name__}")
         async def wrap_endpoint(v: response_model):
-            return func(v.dict())
+            if inspect.iscoroutinefunction(func):
+                return await func(v.dict())
+            else:
+                return func(v.dict())
 
         return func
 
@@ -57,7 +68,14 @@ class Orra:
         self._compiled_workflow.invoke({})
 
     def _register(self, func: Callable):
-        self._workflow.add_node(func.__name__, func)
+        if inspect.iscoroutinefunction(func):
+            def wrap_async(*args, **kwargs):
+                return asyncio.run(func(*args, **kwargs))
+            executable_func = wrap_async
+        else:
+            executable_func = func
+
+        self._workflow.add_node(func.__name__, executable_func)
         self._steps.append(func.__name__)
 
     @staticmethod
