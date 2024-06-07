@@ -1,19 +1,30 @@
 import importlib
+import signal
+import sys
 from logging import getLogger
 from typing import Annotated, Union
 
+from motleycache import enable_cache, disable_cache
 import typer
 from rich import print as rprint
 
 from . import __version__
-from .logging import setup_logging
 from .exceptions import OrraCliException
+from .logging import setup_logging
 from .resolve import get_import_string
 
 app = typer.Typer(rich_markup_mode="rich")
 
 setup_logging()
 logger = getLogger(__name__)
+
+
+def signal_handler(sig, frame):
+    disable_cache()
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
 
 
 class RichPrinter:
@@ -51,7 +62,10 @@ def callback(
 
 
 @app.command()
-def run(debug: bool = typer.Option(False, "--debug", help="Activate debug mode.")) -> None:
+def run(
+        cache: bool = typer.Option(False, "--cache", help="Cache LLM / tool calls and all web requests."),
+        debug: bool = typer.Option(False, "--debug", help="Activate debug mode.")
+) -> None:
     host = "127.0.0.1"
     port = 1430
 
@@ -79,6 +93,9 @@ def run(debug: bool = typer.Option(False, "--debug", help="Activate debug mode."
         raise OrraCliException(
             "Could not import Uvicorn"
         ) from None
+
+    if cache:
+        enable_cache()
 
     uvicorn.run(
         app=server_factory,
