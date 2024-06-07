@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 from typing import Any, Callable
 
@@ -67,7 +68,14 @@ class Orra:
         self._compiled_workflow.invoke({})
 
     def _register(self, func: Callable):
-        self._workflow.add_node(func.__name__, func)
+        if inspect.iscoroutinefunction(func):
+            def wrap_async(*args, **kwargs):
+                return asyncio.run(func(*args, **kwargs))
+            executable_func = wrap_async
+        else:
+            executable_func = func
+
+        self._workflow.add_node(func.__name__, executable_func)
         self._steps.append(func.__name__)
 
     @staticmethod
