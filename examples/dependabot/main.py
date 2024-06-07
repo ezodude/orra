@@ -46,12 +46,11 @@ def discover_dependencies(state: dict) -> Any:
 # A POST HTTP endpoint is created for this step at path: `/workflow/research_updates`.
 # This simplifies testing and integration checks.
 @app.step
-async def research_updates(state: dict) -> Any:
-    tasks = [steps.research_update(dependency) for dependency in state['dependencies']]
-    results = await asyncio.gather(*tasks)
+def research_updates(state: dict) -> Any:
+    result = [asyncio.run(steps.research_update(dependency)) for dependency in state['dependencies']]
     return {
         **state,
-        "researched": results
+        "researched": result
     }
 
 # The `draft_issues` step drafts GitHub issues based on dependency research using a CrewAI agent crew.
