@@ -40,7 +40,7 @@ class Orra:
 
         return func
 
-    def run(self, printer: Printer = NullPrinter(), debug: bool = False) -> Callable:
+    def compile(self, printer: Printer = NullPrinter(), debug: bool = False) -> Callable:
         if debug:
             printer.print("Initialising \[debug] mode...Done!")
 
