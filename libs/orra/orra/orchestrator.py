@@ -40,9 +40,9 @@ class Orra:
 
         return func
 
-    def run(self, printer: Printer = NullPrinter(), debug: bool = False) -> Callable:
+    def compile(self, printer: Printer = NullPrinter(), debug: bool = False) -> Callable:
         if debug:
-            printer.print(f"Initialising \[debug] mode...Done!")
+            printer.print("Initialising \[debug] mode...Done!")
 
         msg = "Compiling Orra application workflow..."
         self._compiled_workflow = self._compile(self._workflow, self._steps)

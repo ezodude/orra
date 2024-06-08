@@ -1,13 +1,16 @@
 import importlib
+import signal
+import sys
 from logging import getLogger
 from typing import Annotated, Union
 
 import typer
-from rich import print as rprint
+from motleycache import enable_cache, disable_cache, set_update_cache_if_exists
 
 from . import __version__
-from .logging import setup_logging
 from .exceptions import OrraCliException
+from .logging import setup_logging
+from .printer import RichPrinter
 from .resolve import get_import_string
 
 app = typer.Typer(rich_markup_mode="rich")
@@ -16,13 +19,12 @@ setup_logging()
 logger = getLogger(__name__)
 
 
-class RichPrinter:
-    def print(self, message: str) -> None:
-        if message.lower().endswith("done!"):
-            rprint(f"  [green]✔ {message}[/green]")
-        else:
-            rprint(f"  {message}")
+def signal_handler(sig, frame):
+    disable_cache()
+    sys.exit(0)
 
+
+signal.signal(signal.SIGINT, signal_handler)
 
 try:
     import uvicorn
@@ -51,9 +53,14 @@ def callback(
 
 
 @app.command()
-def run(debug: bool = typer.Option(False, "--debug", help="Activate debug mode.")) -> None:
+def run(
+        cache: bool = typer.Option(False, "--cache", help="Cache LLM / tool calls and all web requests."),
+        debug: bool = typer.Option(False, "--debug", help="Activate debug mode.")
+) -> None:
     host = "127.0.0.1"
     port = 1430
+    printer = RichPrinter()
+    configure_caching_if_needed(cache, printer)
 
     try:
         orra_import = get_import_string(path=None, app_name="app")
@@ -61,31 +68,41 @@ def run(debug: bool = typer.Option(False, "--debug", help="Activate debug mode."
         logger.error(str(e))
         raise typer.Exit(code=1) from None
 
-    printer = RichPrinter()
-    parts = orra_import.split(":")
-
-    module = importlib.import_module(parts[0])
-    orra_app = getattr(module, parts[1])
-    server_factory = orra_app.run(printer=printer, debug=debug)
-
-    printer.print("Starting Orra application... Done!")
-
-    printer.print("")
-    printer.print("Orra development server running!")
-    printer.print(f"Your API is running at:     http://{host}:{port}")
-    printer.print("")
+    server_factory = compile_and_prep_orra(orra_import, printer, debug, host, port)
 
     if not uvicorn:
-        raise OrraCliException(
-            "Could not import Uvicorn"
-        ) from None
+        raise OrraCliException("Could not import Uvicorn") from None
 
     uvicorn.run(
         app=server_factory,
         host=host,
         port=port,
-        log_level="info"
+        log_level=("debug" if debug else "info")
     )
+
+
+def configure_caching_if_needed(cache: bool = False, printer: RichPrinter = None):
+    if not cache:
+        return
+
+    set_update_cache_if_exists(False)
+    enable_cache()
+    printer.print('Initialising \[cache] mode...Done!')
+
+
+def compile_and_prep_orra(orra_import, printer, debug, host=None, port=None):
+    parts = orra_import.split(":")
+    module = importlib.import_module(parts[0])
+    orra_app = getattr(module, parts[1])
+    factory = orra_app.compile(printer=printer, debug=debug)
+
+    printer.print("Starting Orra application... Done!")
+    printer.print("")
+    printer.print("Orra development server running!")
+    printer.print(f"Your API is running at:     http://{host}:{port}")
+    printer.print("")
+
+    return factory
 
 
 def main():
