@@ -1,22 +1,10 @@
 # 🪡 orra
 
-🦸 Instantly orchestrate multi-agent workflows as services with Orra.
-
-Orra's **Python SDK** and **Local Development Environment** enable agent service-based workflows with deployments,
-and [workflow enhancements](#workflow-enhancements-in-the-works). This makes multi-agent orchestrations work seamlessly
-in production.
+🦸 Dev-friendly platform purpose built to help you create a backend for your Agentic app.
 
 ## Why Orra?
 
-You've got a base agent workflow up and running. But you want to ship it with a smaller LLM model for cost savings. Or,
-you want to ensure the quality of the outputs. Or, maybe you want to hit the ground running by plugging in some
-pre-built agents straight away.
-
-That's where Orra comes in. 🚀
-
-Built on [LangGraph's](https://github.com/langchain-ai/langgraph/) powerful Agent runtime. Orra is focused on making it
-super simple to deploy your agents as services and get them production-ready. We take care of all the complex,
-behind-the-scenes stuff, so you can concentrate on creating awesome user experiences. ⚡️⚡️
+There are a lot of libraries around, e.g. CrewAI, Langchain or Griptape, that help you build out an Agent or a crew
 
 ## Mix and match agents
 
@@ -25,25 +13,20 @@ like [GPT Researcher](https://github.com/assafelovic/gpt-researcher) with custom
 [LangChain](https://python.langchain.com/v0.1/docs/modules/agents/), [CrewAI](https://github.com/joaomdmoura/crewAI),
 and more.
 
-## Workflow enhancements (in the works)
+You can simply install or import your agents and use them in your Orra application.
 
-Orra bakes in enhancements to enable reliable, repeatable execution of complex multi agent service-based workflows by:
+## Roadmap
 
-- Offering pre-built data and API integrations as part of the SDK.
-- Standardizing flow control between agent services.
-- Enhancing tool prompting via integrated LLM fine-tuning.
-- Evaluating agent-service outputs to ensure correctness and quality.
-- Monitoring costs across LLMs and tools.
-- Offering pre-built open-source agents to get you up and running fast.
+
+
 
 ## We're just getting started
 
-We're still ironing out the details of our **Local Development Environment**.
+We're still ironing out the details.
 
-You can try out the latest by installing a local version of Orra.
+You can try out the latest by cloning the repo installing a local version of Orra.
 
-(Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent service-based
-workflow)
+
 
 ### What does Orra look like?
 
@@ -68,6 +51,11 @@ def research_topic(state: dict) -> Any:
 
 # **** That's it! You now have a `/workflow` endpoint plus an endpoint for each step. ****
 ```
+
+#### Indepth example 
+
+Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent service-based
+workflow
 
 ### Try Orra locally
 
