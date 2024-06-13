@@ -8,12 +8,13 @@ We want you to share your Agentic app as soon as you're done prototyping your Ag
 
 But ... building resilient agentic apps is no trivial task. Their backends need robust recovery - if there's an outage,
 agents should seamlessly resume from their last working state. Data access must be carefully restricted for security.
-And we can't have them fabricating responses - accuracy is paramount.
+And we can't have them fabricating responses - accuracy is paramount. And, that's just the tip of the iceberg, there are
+even more concerns that will keep you from shipping.
 
-And, that's just the tip of the iceberg, there are even more concerns that will keep you from shipping. The good news is
-that Orra understands these hurdles.
+The good news is that Orra understands these hurdles.
 
-Orra provides the right tools for you to quickly build out and configure a backend that just works. Our aim is to provide
+Orra provides the right tools for you to quickly build out and configure a backend that just works. Our aim is to
+provide
 infrastructure, inbuilt integrations and dashboards to keep your agentic app running just right.
 
 ## Mix and match agents
