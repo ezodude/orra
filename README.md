@@ -6,11 +6,15 @@
 
 We want you to share your Agentic app as soon as you're done prototyping your Agents or Crew.
 
-But ... Agentic apps are tricky, they require a different kind of setup from a normal app. If there was an outage, your
-Agents have to be resilient to continue from their last working point. To keep things secure, you'd probably restrict
-their data access to the minimum they need to complete their tasks. And, you want to make sure they're coming up with
-the right results not some hokum they've made up. Not to mention, perhaps using cheaper LLMs while ensuring their
-responsive to your tool prompts and more!
+But ... building resilient agentic apps is no trivial task. Their backends need robust recovery - if there's an outage,
+agents should seamlessly resume from their last working state. Data access must be carefully restricted for security.
+And we can't have them fabricating responses - accuracy is paramount.
+
+And, that's just the tip of the iceberg, there are even more concerns that will keep you from shipping. The good news is
+that Orra understands these hurdles.
+
+Orra provides the right tools for you to quickly build out and configure a backend that just works. Providing
+infrastructure, inbuilt integrations and dashboards to keep your agentic app running just right.
 
 ## Mix and match agents
 
