@@ -4,7 +4,13 @@
 
 ## Why Orra?
 
-There are a lot of libraries around, e.g. CrewAI, Langchain or Griptape, that help you build out an Agent or a crew
+We want you to share your Agentic app as soon as you're done prototyping your Agents or Crew.
+
+But ... Agentic apps are tricky, they require a different kind of setup from a normal app. If there was an outage, your
+Agents have to be resilient to continue from their last working point. To keep things secure, you'd probably restrict
+their data access to the minimum they need to complete their tasks. And, you want to make sure they're coming up with
+the right results not some hokum they've made up. Not to mention, perhaps using cheaper LLMs while ensuring their
+responsive to your tool prompts and more!
 
 ## Mix and match agents
 
@@ -17,16 +23,11 @@ You can simply install or import your agents and use them in your Orra applicati
 
 ## Roadmap
 
-
-
-
 ## We're just getting started
 
 We're still ironing out the details.
 
 You can try out the latest by cloning the repo installing a local version of Orra.
-
-
 
 ### What does Orra look like?
 
@@ -52,7 +53,7 @@ def research_topic(state: dict) -> Any:
 # **** That's it! You now have a `/workflow` endpoint plus an endpoint for each step. ****
 ```
 
-#### Indepth example 
+#### Indepth example
 
 Check out the [Dependabot example](examples/dependabot/README.md) for a demo of a real-world agent service-based
 workflow
