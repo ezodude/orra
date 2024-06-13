@@ -10,10 +10,11 @@ from orra import Orra
 
 import steps
 
-# Initialise an Orra app to orchestrate the Dependabot as a service-based workflow.
+# Initialise an Orra instance to create a Dependabot backend.
 
-# The workflow is made up of a series of steps that are orchestrated
-# and later executed **in the order they are defined**.
+# A backend is created using a flow that is constructed as a series of steps.
+# Each step has its own API endpoint. They that are orchestrated into a flow and
+# later executed **in the order they are defined**.
 # The `@app.step` decorator is used to define a step.
 
 # All steps share state. Orra requires you to declare the schema used by the state object.
@@ -30,7 +31,7 @@ app = Orra(
 
 
 # The `discover_dependencies` step discovers dependencies that require an update.
-# A POST HTTP endpoint is created for this step at path: `/workflow/discover_dependencies`.
+# A POST API endpoint is created for this step at path: `/flow/discover_dependencies`.
 # This simplifies testing and integration checks.
 @app.step
 def discover_dependencies(state: dict) -> Any:
@@ -42,7 +43,7 @@ def discover_dependencies(state: dict) -> Any:
 
 
 # The `research_updates` step researches dependency updates using the GPT-Research agent.
-# A POST HTTP endpoint is created for this step at path: `/workflow/research_updates`.
+# A POST API endpoint is created for this step at path: `/flow/research_updates`.
 # This simplifies testing and integration checks.
 @app.step
 async def research_updates(state: dict) -> Any:
@@ -55,7 +56,7 @@ async def research_updates(state: dict) -> Any:
 
 
 # The `draft_issues` step drafts GitHub issues based on dependency research using a CrewAI agent crew.
-# A POST HTTP endpoint is created for this step at path: `/workflow/draft_issues`.
+# A POST API endpoint is created for this step at path: `/flow/draft_issues`.
 # This simplifies testing and integration checks.
 @app.step
 def draft_issues(state: dict) -> Any:
@@ -67,7 +68,7 @@ def draft_issues(state: dict) -> Any:
 
 
 # The `submit_issues` step generates API calls to simulate submitting the drafted GitHub issues.
-# A POST HTTP endpoint is created for this step at path: `/workflow/submit_issues`.
+# A POST API endpoint is created for this step at path: `/flow/submit_issues`.
 # This simplifies testing and integration checks.
 @app.step
 def submit_issues(state: dict) -> Any:
@@ -77,5 +78,5 @@ def submit_issues(state: dict) -> Any:
         "submitted": commands
     }
 
-# **** Use the CLI to run the app. This creates a POST HTTP endpoint at path: `/workflow`. ****
-# *** Call this endpoint to execute the Dependabot workflow. ***
+# **** Use the CLI to run your backend. This implicitly creates a POST API endpoint at path: `/flow`. ****
+# *** Call this endpoint to execute the whole Dependabot flow. ***

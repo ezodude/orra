@@ -1,14 +1,14 @@
 # Dependabot Example
 
-This project simulates a Dependabot-like agent system orchestrated as a service-based workflow using Orra. It drafts
+This project simulates a Dependabot-like agentic app using Orra to create the backend. It drafts
 GitHub issues for outdated dependencies.
 
 ## How it works
 
-The project's workflow is orchestrated as steps in [main.py](main.py) file. The file is well documented and
+The backend is orchestrated as a flow with multiple steps in [main.py](main.py) file. The file is well documented and
 showcases how Orra uses convention to wire up a multi-agent backed system as services.
 
-Each orchestrated step is a function that can be a simple Python function or a more complex Agent.
+Each step is a function that can import/export data or is an Agent.
 
 ## Agent steps
 
@@ -51,25 +51,25 @@ cp .env.example .env
 poetry run python -m orra_cli run
 ```
 
-The steps are now orchestrated in a service-based workflow and can be executed via HTTP endpoints.
+The backend is started and can be executed via various API endpoints.
 
-4. Execute the Dependabot by sending a POST request to the `/workflow` endpoint:
+4. Execute the Dependabot by sending a POST request to the `/flow` endpoint:
 
 ```shell
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"dependencies": [], "researched": [], "drafted": [], "submitted": []}' \
-  http://127.0.0.1:1430/workflow
+  http://127.0.0.1:1430/flow
 ```
 
-7. Execute individual Dependabot steps by sending a POST request to the `/workflow/step_name` endpoint.
+5. Execute individual Dependabot steps by sending a POST request to the `/flow/step_name` endpoint.
    E.g. to execute the `discover_dependencies` step, run the following command:
 
 ```shell
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"dependencies": [], "researched": [], "drafted": [], "submitted": []}' \
-  http://127.0.0.1:1430/workflow/discover_dependencies
+  http://127.0.0.1:1430/flow/discover_dependencies
 ```
 
 > **Note**:
