@@ -1,6 +1,6 @@
 # 🪡 orra
 
-🦸 Dev-friendly platform purpose built to help you create a backend for your Agentic app.
+🦸 Dev-friendly platform providing a set of building blocks and convention to help you ship robust and reliable multi-agent apps.
 
 ## Why Orra?
 
@@ -21,9 +21,9 @@ dashboards to keep your agentic app running just right.
 
 We're still ironing out the details.
 
-### What does an Orra backend look like?
+### What does an Orra powered app look like?
 
-It should take a few lines of code to set up a basic backend using Orra:
+It should take a few lines of code to power your agentic app with Orra:
 
 ```python
 from typing import Optional, Any
@@ -43,4 +43,5 @@ def research_topic(state: dict) -> Any: # wire in your imported agent
     return {**state, "researched": result}
 
 # **** That's it! You now have a `/flow` API endpoint, plus an API endpoint for each step. ****
+# **** More highlights soon. ****
 ```
