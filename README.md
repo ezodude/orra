@@ -75,7 +75,7 @@ orractl --help
 # Usage:  orractl [OPTIONS] COMMAND
 # projects    Add and manage projects
 # webhooks    Add and manage webhooks for a project
-# keys        Add and manage API_KEYS for a project
+# api-keys    Add and manage API keys for a project
 # ps          List orchestrations for a project
 # inspect     Return information of an orchestration
 # logs        Fetch the logs for an orchestration
@@ -88,15 +88,26 @@ orractl --help
 
 A multi-agent application may consist of many components. Orra orchestrates the LLM based Agents and related services,
 e.g. data ingestion services, that run the core of your application. It assumes both Agents and services are run as
-microservices, always available to accept data. While an orchestration plan is executing, Orra checks whether the
-necessary Agents and services are online. If a necessary service is offline, task execution is halted until it's back
-online.
+microservices, always available to accept data.
+
+Orchestration plans are constantly adjusted to ensure tasks are completed using the available Agents and services. For
+example, if a necessary service is offline, task execution maybe halted until it's back online.
 
 It is up to you how your Agents and services are deployed. But, we strongly recommend they are deployed and run as
-containers for optimal performance. Checks are
+containers for optimal performance.
 
-To start orchestrating Agents and services for your application you have to log in and add a project.
+### Configure orchestration for your project
 
-```shell
-orractl projects add new-orra-project
-```
+1. Log in and add a project.
+   ```shell
+      orractl projects add new-orra-project
+   ```
+2. Add a webhook to accept orchestration results. 
+   ```shell
+      orrctl webhooks add --url "http://localhost:3000/webhooks/orra" -p new-orra-project
+   ```
+3. Generate an API key to authenticate and orchestrate tasks. The new API key is required for use in Orra SDKs.
+   ```shell
+      orrctl api-keys add --name 'My API Key' -p new-orra-project
+   ```
+
