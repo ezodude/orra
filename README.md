@@ -3,9 +3,6 @@
 Orra is a language-agnostic LLM powered orchestration platform. It provides building blocks to build reliable and fast
 multi-agent applications. Developers can stop re-inventing the wheel and focus on adding customer value.
 
-LLM-powered orchestration enables real-time adjustment of workflows based on context, intermediate results, and changing
-requirements, allowing for more intelligent and flexible multi-agent systems.
-
 ## Key Benefits
 
 1. **Dynamic AI-Powered Adaptability**: Real-time workflow adjustments based on context, ensuring optimal performance in
