@@ -3,20 +3,43 @@
 Orra is a language-agnostic LLM powered orchestration platform. It provides building blocks to build reliable and fast
 multi-agent applications. Developers can stop re-inventing the wheel and focus on adding customer value.
 
-## Benefits
+LLM-powered orchestration enables real-time adjustment of workflows based on context, intermediate results, and changing
+requirements, allowing for more intelligent and flexible multi-agent systems.
 
-1. **Reliable multi-agent apps**: Deterministic task completion with built-in outage handling.
+## Key Benefits
 
-2. **Fast parallel processing**: Execute services and Agents concurrently for rapid task completion.
+1. **Dynamic AI-Powered Adaptability**: Real-time workflow adjustments based on context, ensuring optimal performance in
+   changing environments.
 
-3. **Consistent result aggregation**: Track interim results across services/Agents and combine them correctly into a
-   single result post-completion.
+2. **Reliable Multi-Agent Orchestration**: Build robust applications with deterministic task completion and automatic
+   outage handling.
 
-4. **Language-agnostic orchestration**: Use our SDKs to reliably orchestrate any service or Agent.
+3. **Accelerated Task Execution**: Fast parallel processing enables concurrent execution of services and Agents for
+   rapid task completion.
 
-5. **Verifiable execution**: Ensure correctness with LLM-generated, verifiable orchestration plans.
+4. **Language-Agnostic Integration**: Use our SDKs to reliably orchestrate any service or Agent, regardless of
+   programming language.
 
-6. **Simplified development workflow**: Focus on you core app features, not infrastructure management.
+5. **Comprehensive Result Management**: Track interim results across services/Agents and accurately combine them into a
+   single final output.
+
+## Why LLM-Powered Orchestration?
+
+LLM-powered orchestration enables real-time adjustment of workflows based on context, intermediate results, and changing
+requirements, allowing for more intelligent and flexible multi-agent systems. Here's how it enhances AI workflow
+management:
+
+1. **Intelligent Workflow Generation**: Automatically create and adapt orchestration plans by understanding the
+   capabilities of registered services and agents.
+    - Decomposes complex tasks without manual intervention
+    - Allocates resources optimally based on service capabilities
+    - Handles task dependencies efficiently
+
+2. **Dynamic Execution and Adaptation**: Continuously adjust workflows during runtime, responding to evolving conditions
+   and interim outputs.
+    - Optimizes task sequences in real-time
+    - Implements intelligent error handling and recovery
+    - Reallocates resources flexibly based on performance and changing needs
 
 ## Getting started
 
