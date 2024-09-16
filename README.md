@@ -70,9 +70,9 @@ and [Docker Compose](https://docs.docker.com/compose/install/) installed before 
 Run commands to set up projects, inspect orchestrations and generate API keys using the Orra command-line tool.
 
 ```shell
-orractl --help
-# orractl manages Orra and orchestration workflows. 
-# Usage:  orractl [OPTIONS] COMMAND
+orra --help
+# orra manages Orra and orchestration workflows. 
+# Usage:  orra [OPTIONS] COMMAND
 # projects    Add and manage projects
 # webhooks    Add and manage webhooks for a project
 # api-keys    Add and manage API keys for a project
@@ -100,15 +100,15 @@ containers for optimal performance.
 
 1. Log in and add a project.
    ```shell
-      orractl projects add new-orra-project
+      orra projects add new-orra-project
    ```
 2. Add a webhook to accept orchestration results.
    ```shell
-      orrctl webhooks add --url "http://localhost:3000/webhooks/orra" -p new-orra-project
+      orra webhooks add --url "http://localhost:3000/webhooks/orra" -p new-orra-project
    ```
 3. Generate an API key to authenticate and orchestrate tasks. The new API key is required for use in Orra SDKs.
    ```shell
-      orrctl api-keys add --name 'My API Key' -p new-orra-project
+      orra api-keys add --name 'My API Key' -p new-orra-project
    ```
 
 ### Setup Agents and services for orchestration
@@ -119,100 +119,289 @@ Here's an example using the JavaScript SDK.
 
 1. Give your Agent or service a unique name.
    Ensure the name can be used as a DNS subdomain name as defined in RFC 1123. This means the name must:
-   - contain no more than 253 characters
-   - contain only lowercase alphanumeric characters, '-' or '.'
-   - start with an alphanumeric character
-   - end with an alphanumeric character
+    - contain no more than 253 characters
+    - contain only lowercase alphanumeric characters, '-' or '.'
+    - start with an alphanumeric character
+    - end with an alphanumeric character
 
 2. Give your Agent or service a concise description that clearly explain what it does.
-   The description cannot be longer than 500 chars. 
+   The description cannot be longer than 500 chars.
 
 3. Define the expected input and output schema.
    ```javascript
-      const serviceSchema = {
-        input: {
-            type: 'object',
-            fields: [ { name: 'customerId', type: 'string', format: 'uuid' } ],
-            required: [ 'customerId' ]
-        },
-        output: {
-            type: 'object',
-            fields: [
-                { name: 'id', type: 'string', format: 'uuid' },
-                { name: 'name', type: 'string' },
-                { name: 'balance', type: 'number', minimum: 0 }
-            ]
-        }
+   const serviceSchema = {
+     input: {
+       type: 'object',
+       fields: [ { name: 'customerId', type: 'string', format: 'uuid' } ],
+       required: [ 'customerId' ]
+     },
+     output: { 
+       type: 'object',
+       fields: [ 
+         { name: 'id', type: 'string', format: 'uuid' },
+         { name: 'name', type: 'string' },
+         { name: 'balance', type: 'number', minimum: 0 }
+       ]
+     }
    };
    ```
-4. Set up the task handler, this is a function called by the SDK that will kick off your Agent or service's work.
-   - It will receive an input object that conforms to the agent/service input schema.
-   - It will output data as an object that conforms to the agent/service output schema.
 
-5. Add a version to the service, this useful for logging and general system debugging. 
+4. Set up the task handler, this is a function called by the SDK that will kick off your Agent or service's work.
+    - It will receive an input object that conforms to the agent/service input schema.
+    - It will output data as an object that conforms to the agent/service output schema.
+
+5. Add a version to the service, this useful for logging and general system debugging.
 
 Here's the full service setup for Orra orchestration.
+
 ```javascript
 const { createClient } = require('@orra/sdk');
 
 // Create a client
 const orraClient = createClient({
-   orraUrl: process.env.ORRA_URL,
-   orraKey: process.env.ORRA_API_KEY
+	orraUrl: process.env.ORRA_URL,
+	orraKey: process.env.ORRA_API_KEY
 });
 
 // Flesh out your services inputs and outputs
 const serviceSchema = {
-     input: {
-         type: 'object',
-         fields: [ { name: 'customerId', type: 'string', format: 'uuid' } ],
-         required: [ 'customerId' ]
-     },
-     output: {
-         type: 'object',
-         fields: [
-             { name: 'id', type: 'string', format: 'uuid' },
-             { name: 'name', type: 'string' },
-             { name: 'balance', type: 'number', minimum: 0 }
-         ]
-     }
+	input: {
+		type: 'object',
+		fields: [ { name: 'customerId', type: 'string', format: 'uuid' } ],
+		required: [ 'customerId' ]
+	},
+	output: {
+		type: 'object',
+		fields: [
+			{ name: 'id', type: 'string', format: 'uuid' },
+			{ name: 'name', type: 'string' },
+			{ name: 'balance', type: 'number', minimum: 0 }
+		]
+	}
 };
 
 async function main() {
-   try {
-       // Register your service or Agent, clearly explain what it does.
-       await orraClient.registerService(
-            'CustomerAccountService',
-            {
-              description: 'Retrieves and manages customer account data' ,
-              schema: serviceSchema,
-              // Setup a handler function that performs the work for this service or Agent.
-              taskHandler: handler,
-              version: '1.0.0'
-            }
-       );
-       
-       console.log('Service registered successfully');
-     } catch (error) {
-       console.error('Registration failed:', error);
-     }
+	try {
+		// Register your service or Agent, clearly explain what it does.
+		await orraClient.registerService(
+			'CustomerAccountService',
+			{
+				description: 'Retrieves and manages customer account data',
+				schema: serviceSchema,
+				// Setup a handler function that performs the work for this service or Agent.
+				taskHandler: handler,
+				version: '1.0.0'
+			}
+		);
+		
+		console.log('Service registered successfully');
+	} catch (error) {
+		console.error('Registration failed:', error);
+	}
 }
 
 // This will receive input as per the input schema setup previously
 function handler(taskData) {
-   console.log('Received task:', task);
-   
-   // Process the task
-   // ..
-   
-   return { status: 'completed', result: 'Processed data' };
+	console.log('Received task:', task);
+	
+	// Process the task
+	// ..
+	
+	return { status: 'completed', result: 'Processed data' };
 }
 
 main();
 
-process.on('SIGINT', () => { 
-   console.log('Closing connection...');
-   orraClient.close();
-   process.exit();
+process.on('SIGINT', () => {
+	console.log('Closing connection...');
+	orraClient.close();
+	process.exit();
 });
+```
+
+### Orchestrate tasks for your app
+
+Typically, you would orchestrate tasks from a front-end client, a CRON Job or another backend system. The tasks may
+encompass short queries to day-long running tasks.
+
+Simply issue a `POST` request to Orra detailing a job that needs to be done by your application and include any related
+data, like a customerId, in the payload. Make sure you include your Orra `API key` as ties the job to a specific
+project.
+
+This is an async request that will result in a response with an Accepted (`202`) HTTP Status Code. The response will
+also include,
+
+- A payload that details Orra's initial orchestration plan.
+- A webhook url that will receive the final job result - already added through the CLI.
+
+This is an example request.
+
+```shell
+curl -X POST https://api.orra.dev/orchestrations \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer YOUR_API_KEY_HERE" \
+-d '{
+  "action": {
+    "type": "customer-inquiry",
+    "content": "Hi, I am interested in your product. Can you tell me more about its features?"
+  },
+  "data": [
+    {
+      "field": "customerId",
+      "value": "cust12345",
+    },
+    {
+      "field": "sellerId",
+      "value": "sell98765",
+    }
+  ],
+  "timestamp": "2024-09-06T14:30:00Z"
+}'
+```
+
+This generates an orchestration plan as part of the response.
+
+> [!NOTE]  
+> Some components will be executed in **parallel** as denoted by the **parallelExecutionGroups** attribute and the
+> dependencies attribute for each step.
+
+```shell
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "status": "ACCEPTED",
+  "executionId": "exec-2024-09-06-15:45:30-789",
+  "message": "Request accepted. Orchestration plan created.",
+  "resultTarget": {
+    "webhook": "https://my-app-frontend/webhooks/orra"
+  },
+  "plan": {
+    "steps": [
+      {
+        "id": "step1",
+        "component": "CustomerDataService",
+        "action": "retrieveCustomerProfile",
+        "input": {
+          "customerId": "cust12345"
+        },
+        "expectedOutput": "customerProfile",
+        "dependencies": []
+      },
+      {
+        "id": "step2",
+        "component": "ProductCatalogService",
+        "action": "getRelevantProducts",
+        "input": {
+          "inquiry": "{{request.action.content}}"
+        },
+        "expectedOutput": "relevantProducts",
+        "dependencies": []
+      },
+      {
+        "id": "step3",
+        "component": "SellerDataService",
+        "action": "retrieveSellerProfile",
+        "input": {
+          "sellerId": "sell98765"
+        },
+        "expectedOutput": "sellerProfile",
+        "dependencies": []
+      },
+      {
+        "id": "step4",
+        "component": "AIAssistantService",
+        "action": "generateResponse",
+        "input": {
+          "customerProfile": "{{step1.output.customerProfile}}",
+          "relevantProducts": "{{step2.output.relevantProducts}}",
+          "sellerProfile": "{{step3.output.sellerProfile}}",
+          "inquiry": "{{request.action.content}}"
+        },
+        "expectedOutput": "aiGeneratedResponse",
+        "dependencies": ["step1", "step2", "step3"]
+      }
+    ],
+    "parallelExecutionGroups": [
+      ["step1", "step2", "step3"],
+      ["step4"],
+    ],
+    "estimatedCompletionTime": "2024-09-06T15:45:45Z",
+  }
+}
+```
+
+Finally, a client can get back the result of the orchestration.
+
+```shell
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "executionId": "exec-2024-09-06-15:45:30-789",
+  "status": "COMPLETED",
+  "startTime": "2024-09-06T15:45:30Z",
+  "endTime": "2024-09-06T15:45:43Z",
+  "result": {
+	  "content": "Thank you for your interest in our products! Based on your inquiry, I'd recommend our Premium Analytics Suite, which offers advanced features including real-time data processing, customizable dashboards, and AI-driven insights. It seamlessly integrates with popular CRM systems and provides comprehensive reporting tools. Would you like to schedule a demo to see these features in action?",
+	  "sentTimestamp": "2024-09-06T15:45:42Z"
+  },
+  "stepResults": [
+    {
+      "id": "step1",
+      "component": "CustomerDataService",
+      "status": "COMPLETED",
+      "startTime": "2024-09-06T15:45:31Z",
+      "endTime": "2024-09-06T15:45:32Z",
+      "output": {
+        "customerProfile": {
+          "id": "cust12345",
+          "name": "Jane Doe",
+          "company": "TechCorp Inc.",
+          "industry": "Software"
+        }
+      }
+    },
+    {
+      "id": "step2",
+      "component": "ProductCatalogService",
+      "status": "COMPLETED",
+      "startTime": "2024-09-06T15:45:31Z",
+      "endTime": "2024-09-06T15:45:33Z",
+      "output": {
+        "relevantProducts": [
+          {
+            "id": "prod001",
+            "name": "Premium Analytics Suite",
+            "features": ["Real-time processing", "AI-driven insights", "CRM integration"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "step3",
+      "component": "SellerDataService",
+      "status": "COMPLETED",
+      "startTime": "2024-09-06T15:45:31Z",
+      "endTime": "2024-09-06T15:45:32Z",
+      "output": {
+        "sellerProfile": {
+          "id": "sell98765",
+          "name": "John Smith",
+          "department": "Enterprise Sales"
+        }
+      }
+    },
+    {
+      "id": "step4",
+      "component": "AIAssistantService",
+      "status": "COMPLETED",
+      "startTime": "2024-09-06T15:45:33Z",
+      "endTime": "2024-09-06T15:45:38Z",
+      "output": {
+        "aiGeneratedResponse": "Thank you for your interest in our products! Based on your inquiry, I'd recommend our Premium Analytics Suite, which offers advanced features including real-time data processing, customizable dashboards, and AI-driven insights. It seamlessly integrates with popular CRM systems and provides comprehensive reporting tools. Would you like to schedule a demo to see these features in action?"
+      }
+    },
+  ]
+}
 ```
