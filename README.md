@@ -9,12 +9,12 @@ multi-agent applications. Developers can stop re-inventing the wheel and focus o
    performance in changing environments.
 
 2. **Build Reliable Multi-Agent Systems**: Create robust applications with deterministic task completion and automatic
-   outage handling.
+   outage handling. **\[Coming Soon\]**
 
 3. **Accelerate Task Execution**: Enable fast parallel processing for concurrent execution of services and Agents.
 
 4. **Integrate Across Languages**: Utilize our SDKs to reliably orchestrate any service or Agent, regardless of
-   programming language.
+   programming language. **Starting with JavaScript/TypeScript**
 
 5. **Manage Results Comprehensively**: Track interim results across services/Agents and accurately combine them into a
    single final output.
@@ -102,7 +102,7 @@ containers for optimal performance.
    ```shell
       orractl projects add new-orra-project
    ```
-2. Add a webhook to accept orchestration results. 
+2. Add a webhook to accept orchestration results.
    ```shell
       orrctl webhooks add --url "http://localhost:3000/webhooks/orra" -p new-orra-project
    ```
@@ -111,3 +111,108 @@ containers for optimal performance.
       orrctl api-keys add --name 'My API Key' -p new-orra-project
    ```
 
+### Setup Agents and services for orchestration
+
+You can use a preferred language SDK to register your Agents and services with our control plane.
+
+Here's an example using the JavaScript SDK.
+
+1. Give your Agent or service a unique name.
+   Ensure the name can be used as a DNS subdomain name as defined in RFC 1123. This means the name must:
+   - contain no more than 253 characters
+   - contain only lowercase alphanumeric characters, '-' or '.'
+   - start with an alphanumeric character
+   - end with an alphanumeric character
+
+2. Give your Agent or service a concise description that clearly explain what it does.
+   The description cannot be longer than 500 chars. 
+
+3. Define the expected input and output schema.
+   ```javascript
+      const serviceSchema = {
+        input: {
+            type: 'object',
+            fields: [ { name: 'customerId', type: 'string', format: 'uuid' } ],
+            required: [ 'customerId' ]
+        },
+        output: {
+            type: 'object',
+            fields: [
+                { name: 'id', type: 'string', format: 'uuid' },
+                { name: 'name', type: 'string' },
+                { name: 'balance', type: 'number', minimum: 0 }
+            ]
+        }
+   };
+   ```
+4. Set up the task handler, this is a function called by the SDK that will kick off your Agent or service's work.
+   - It will receive an input object that conforms to the agent/service input schema.
+   - It will output data as an object that conforms to the agent/service output schema.
+
+5. Add a version to the service, this useful for logging and general system debugging. 
+
+Here's the full service setup for Orra orchestration.
+```javascript
+const { createClient, setHandler } = require('@orra/sdk');
+
+// Create a client
+const orraClient = createClient({
+   orraUrl: process.env.ORRA_URL,
+   orraKey: process.env.ORRA_API_KEY
+});
+
+// Flesh out your services inputs and outputs
+const serviceSchema = {
+     input: {
+         type: 'object',
+         fields: [ { name: 'customerId', type: 'string', format: 'uuid' } ],
+         required: [ 'customerId' ]
+     },
+     output: {
+         type: 'object',
+         fields: [
+             { name: 'id', type: 'string', format: 'uuid' },
+             { name: 'name', type: 'string' },
+             { name: 'balance', type: 'number', minimum: 0 }
+         ]
+     }
+};
+
+async function main() {
+   try {
+       // Register your service or Agent, clearly explain what it does.
+       await orraClient.registerService(
+            'CustomerAccountService',
+            {
+              description: 'Retrieves and manages customer account data' ,
+              schema: serviceSchema,
+              // Setup a handler function that performs the work for this service or Agent.
+              taskHandler: handler,
+              version: '1.0.0'
+            }
+       );
+       
+       console.log('Service registered successfully');
+     } catch (error) {
+       console.error('Registration failed:', error);
+     }
+}
+
+// This will receive input as per the input schema setup previously
+function handler(taskData) {
+   console.log('Received task:', task);
+   
+   // Process the task
+   // ..
+   
+   return { status: 'completed', result: 'Processed data' };
+}
+
+main();
+
+process.on('SIGINT', () => { 
+   console.log('Closing connection...');
+   orraClient.close();
+   process.exit();
+});
+```
