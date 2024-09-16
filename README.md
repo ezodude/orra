@@ -1,7 +1,12 @@
-# Orra
+# 🪡Orra
 
 Orra is a language-agnostic LLM powered orchestration platform. It provides building blocks to build reliable and fast
 multi-agent applications. Developers can stop re-inventing the wheel and focus on adding customer value.
+
+## Upcoming Release: Narwal 🐋🦄
+
+Our next release, codenamed "Narwal", is currently under development on the `narwal` branch. This release will bring the
+✨Alpha✨ version of Orra's orchestration capabilities.
 
 ## Key Benefits
 
@@ -219,6 +224,7 @@ process.on('SIGINT', () => {
 	process.exit();
 });
 ```
+
 </details>
 
 ### Orchestrate tasks for your app
@@ -261,6 +267,7 @@ curl -X POST https://api.orra.dev/orchestrations \
   "timestamp": "2024-09-06T14:30:00Z"
 }'
 ```
+
 </details>
 
 <details>
@@ -335,6 +342,7 @@ Content-Type: application/json
   }
 }
 ```
+
 </details>
 
 <details>
@@ -412,4 +420,5 @@ Content-Type: application/json
   ]
 }
 ```
+
 </details>
