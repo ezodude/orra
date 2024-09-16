@@ -152,7 +152,8 @@ Here's an example using the JavaScript SDK.
 
 5. Add a version to the service, this useful for logging and general system debugging.
 
-Here's the full service setup for Orra orchestration.
+<details>
+<summary>Here's the full service setup for Orra orchestration.</summary>
 
 ```javascript
 const { createClient } = require('@orra/sdk');
@@ -218,6 +219,7 @@ process.on('SIGINT', () => {
 	process.exit();
 });
 ```
+</details>
 
 ### Orchestrate tasks for your app
 
@@ -234,7 +236,8 @@ also include,
 - A payload that details Orra's initial orchestration plan.
 - A webhook url that will receive the final job result - already added through the CLI.
 
-This is an example request.
+<details>
+   <summary>This is an example request.</summary>
 
 ```shell
 curl -X POST https://api.orra.dev/orchestrations \
@@ -258,8 +261,10 @@ curl -X POST https://api.orra.dev/orchestrations \
   "timestamp": "2024-09-06T14:30:00Z"
 }'
 ```
+</details>
 
-This generates an orchestration plan as part of the response.
+<details>
+<summary>This generates an orchestration plan as part of the response.</summary>
 
 > [!NOTE]  
 > Some components will be executed in **parallel** as denoted by the **parallelExecutionGroups** attribute and the
@@ -330,8 +335,10 @@ Content-Type: application/json
   }
 }
 ```
+</details>
 
-Finally, a client can get back the result of the orchestration.
+<details>
+<summary>Finally, a client receives the result of the orchestration using the **webhook**.</summary>
 
 ```shell
 HTTP/1.1 200 OK
@@ -405,3 +412,4 @@ Content-Type: application/json
   ]
 }
 ```
+</details>
