@@ -338,7 +338,7 @@ Content-Type: application/json
 </details>
 
 <details>
-<summary>Finally, a client receives the result of the orchestration using the **webhook**.</summary>
+<summary>Finally, a client receives the result of the orchestration using the <b>webhook</b>.</summary>
 
 ```shell
 HTTP/1.1 200 OK
