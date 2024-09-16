@@ -37,7 +37,7 @@ management:
     - Implements intelligent error handling and recovery
     - Reallocates resources flexibly based on performance and changing needs
 
-## Getting started
+## Installation
 
 **Orra is in Alpha**. The core component is the control plane which is run as a server. It is available for Self-hosting
 in Single User mode. We do not recommend running it in production yet.
@@ -84,7 +84,7 @@ orra --help
 # version     Print the client and server version information
 ```
 
-## Orchestration
+## Getting started with orchestration
 
 A multi-agent application may consist of many components. Orra orchestrates the LLM based Agents and related services,
 e.g. data ingestion services, that run the core of your application. It assumes both Agents and services are run as
