@@ -153,7 +153,7 @@ Here's an example using the JavaScript SDK.
 
 Here's the full service setup for Orra orchestration.
 ```javascript
-const { createClient, setHandler } = require('@orra/sdk');
+const { createClient } = require('@orra/sdk');
 
 // Create a client
 const orraClient = createClient({
