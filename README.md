@@ -57,7 +57,7 @@ and [Docker Compose](https://docs.docker.com/compose/install/) installed before 
     ```
 2. Navigate to the control plane's root folder and run the control plane.
     ```shell
-      cd controlplane
+      cd control-plane
       cp env-example .env 
       docker compose up -d
     ```
