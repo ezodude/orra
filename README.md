@@ -63,11 +63,11 @@ and [Docker Compose](https://docs.docker.com/compose/install/) installed before 
     ```
 3. Download the relevant Orra CLI binary and add it your path.
     ```shell
-      mv orractl /user/local/bin/.
+      mv orra /user/local/bin/.
     ```
 4. Login with the CLI and follow the instructions
     ```shell
-      orractl login
+      orra login
     ```
 
 ## Using the Orra CLI
