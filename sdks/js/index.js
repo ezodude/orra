@@ -17,9 +17,9 @@ class OrraSDK {
 		version: '',
 	}) {
 		const response = await fetch(`${this.#apiUrl}/register/service`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
+			method: 'POST', headers: {
+				'Content-Type': 'application/json', 'Authorization': `Bearer ${this.#apiKey}` // Make sure to include the API key
+			}, body: JSON.stringify({
 				name: serviceName,
 				description: opts?.description,
 				schema: opts?.schema
