@@ -18,14 +18,19 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+func (o *Orchestration) isComplete() bool {
+	return true
+}
+
 func NewOrchestrationPlatform() *OrchestrationPlatform {
 	op := &OrchestrationPlatform{
-		services:      make(map[string]*ServiceInfo),
-		tasks:         make(chan *Task, 100),
-		results:       make(chan *TaskResult, 100),
-		wsConnections: make(map[string]chan *Task),
-		projects:      make(map[string]*Project),
-		taskStore:     make(map[string]*Task),
+		tasks:              make(chan *Task, 100),
+		results:            make(chan *TaskResult, 100),
+		wsConnections:      make(map[string]*ServiceConnection),
+		projects:           make(map[string]*Project),
+		services:           make(map[string][]*ServiceInfo),
+		orchestrationStore: make(map[string]*Orchestration),
+		taskStore:          make(map[string]*Task),
 	}
 	go op.orchestrator()
 	return op
@@ -42,20 +47,57 @@ func (op *OrchestrationPlatform) orchestrator() {
 	}
 }
 
-func (op *OrchestrationPlatform) executeTask(task *Task) {
-	// Placeholder: Determine how to run the task
-	serviceName := op.determineService(task)
+func (op *OrchestrationPlatform) determineServices(orchestration *Orchestration) []*ServiceInfo {
+	// Placeholder: Implement logic to determine which service should handle the task
+	return op.services[orchestration.ProjectID]
+}
 
-	if taskChan, ok := op.wsConnections[serviceName]; ok {
-		taskChan <- task
-	} else {
-		log.Printf("Service %s not connected", serviceName)
+func (op *OrchestrationPlatform) executeOrchestration(orchestration *Orchestration) {
+	// Placeholder: Determine how to run the task
+	services := op.determineServices(orchestration)
+
+	// Placeholder: Input added to any task based schema below SHOULD BE UPDATED FOR SPECIFIC TASKS
+	//const serviceSchema =
+	//{
+	//  input:
+	//  {
+	//		type: 'object',
+	//		fields: [ { name: 'customerId', type: 'string', format: 'uuid' } ],
+	//    required: [ 'customerId' ]
+	//  },
+	//  output: {
+	//    type: 'object',
+	//    fields: [
+	//      { name: 'id', type: 'string', format: 'uuid' },
+	//      { name: 'name', type: 'string' },
+	//      { name: 'balance', type: 'number', minimum: 0 }
+	//    ]
+	//  }
+	//};
+
+	for _, serviceInfo := range services {
+		task := Task{
+			ID:              uuid.New().String(),
+			ServiceID:       serviceInfo.ID,
+			OrchestrationID: orchestration.ID,
+			ProjectID:       serviceInfo.ProjectID,
+			Input:           []byte(`{"customerId": "12aaf63d-6331-4377-83d5-ff75a5d36dc6"}`),
+			Status:          Pending,
+		}
+		op.taskStore[task.ID] = &task
+		op.tasks <- &task
+		orchestration.Status = Processing
 	}
 }
 
-func (op *OrchestrationPlatform) determineService(task *Task) string {
-	// Placeholder: Implement logic to determine which service should handle the task
-	return task.Service
+func (op *OrchestrationPlatform) executeTask(task *Task) {
+	// Placeholder: Determine how to run the task
+	if svcConn, ok := op.wsConnections[task.ServiceID]; ok {
+		task.Status = Processing
+		svcConn.TaskWorkChan <- task
+	} else {
+		log.Printf("ServiceID %s not connected", task.ServiceID)
+	}
 }
 
 func (op *OrchestrationPlatform) processResult(result *TaskResult) {
@@ -64,28 +106,35 @@ func (op *OrchestrationPlatform) processResult(result *TaskResult) {
 		log.Printf("Task %s not found", result.TaskID)
 		return
 	}
-
+	orchestration, ok := op.orchestrationStore[task.OrchestrationID]
+	if !ok {
+		log.Printf("Orchestration %s not found", task.OrchestrationID)
+		return
+	}
+	task.Status = Completed
+	orchestration.Status = Completed
 	// Placeholder: Implement result aggregation logic
-	op.aggregateResult(task, result)
+	op.aggregateResult(orchestration, result)
 
 	// Check if this is the final result for the project
-	if op.isProjectComplete(task.ProjectID) {
-		op.sendWebhook(task.ProjectID)
+	if op.isOrchestrationComplete(orchestration) {
+		op.sendWebhook(orchestration.ProjectID, orchestration.Results)
 	}
 }
 
-func (op *OrchestrationPlatform) aggregateResult(task *Task, _ *TaskResult) {
+func (op *OrchestrationPlatform) aggregateResult(orchestration *Orchestration, result *TaskResult) {
 	// Placeholder: Implement result aggregation logic
-	log.Printf("Aggregating result for task %s", task.ID)
+	orchestration.Results = append(orchestration.Results, result.Result)
+	log.Printf("Aggregating result for Orchestration %s and Task %s", orchestration.ID, result.TaskID)
 }
 
-// isProjectComplete accepts a projectID
-func (op *OrchestrationPlatform) isProjectComplete(_ string) bool {
+// isOrchestrationComplete accepts an orchestration ID
+func (op *OrchestrationPlatform) isOrchestrationComplete(orchestration *Orchestration) bool {
 	// Placeholder: Implement logic to check if all tasks for a project are complete
-	return true
+	return orchestration.isComplete()
 }
 
-func (op *OrchestrationPlatform) sendWebhook(projectID string) {
+func (op *OrchestrationPlatform) sendWebhook(projectID string, results []json.RawMessage) {
 	project, ok := op.projects[projectID]
 	if !ok {
 		log.Printf("Project %s not found", projectID)
@@ -93,7 +142,7 @@ func (op *OrchestrationPlatform) sendWebhook(projectID string) {
 	}
 
 	// Placeholder: Implement webhook sending logic
-	log.Printf("Sending webhook for project %s to %s", projectID, project.Webhook)
+	log.Printf("Using webhook %s for project %s to send resulrs %s", projectID, project.Webhook, results)
 }
 
 func (op *OrchestrationPlatform) RegisterProject(w http.ResponseWriter, r *http.Request) {
@@ -129,10 +178,15 @@ func (op *OrchestrationPlatform) RegisterServiceOrAgent(w http.ResponseWriter, r
 	}
 
 	service.ID = uuid.New().String()
-	service.ProjectId = project.ID
+	service.ProjectID = project.ID
 	service.Type = serviceType
-	op.services[service.ID] = &service
-	op.wsConnections[service.ID] = make(chan *Task, 100)
+
+	// need a better to add services that avoid duplicating service registration
+	op.services[project.ID] = append(op.services[project.ID], &service)
+	op.wsConnections[service.ID] = &ServiceConnection{
+		TaskWorkChan: make(chan *Task, 100),
+		Status:       Disconnected,
+	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"id":     service.ID,
@@ -152,20 +206,31 @@ func (op *OrchestrationPlatform) RegisterAgent(w http.ResponseWriter, r *http.Re
 	op.RegisterServiceOrAgent(w, r, Agent)
 }
 
-func (op *OrchestrationPlatform) SubmitTask(w http.ResponseWriter, r *http.Request) {
-	var task Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+func (op *OrchestrationPlatform) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
+	apiKey := r.Context().Value("api_key").(string)
+	project, err := op.GetProjectByApiKey(apiKey)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	task.ID = uuid.New().String()
-	task.Status = Pending
+	var orchestration Orchestration
+	if err := json.NewDecoder(r.Body).Decode(&orchestration); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	op.taskStore[task.ID] = &task
-	op.tasks <- &task
+	orchestration.ID = uuid.New().String()
+	orchestration.Status = Pending
+	orchestration.ProjectID = project.ID
+	op.orchestrationStore[orchestration.ID] = &orchestration
 
-	if err := json.NewEncoder(w).Encode(map[string]string{"taskId": task.ID}); err != nil {
+	log.Println("Am I blocked?")
+	go op.executeOrchestration(&orchestration)
+	log.Println("I AM NOT BLOCKED!!!")
+
+	w.WriteHeader(http.StatusAccepted)
+	if err := json.NewEncoder(w).Encode(orchestration); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -179,43 +244,51 @@ func (op *OrchestrationPlatform) HandleWebSocket(w http.ResponseWriter, r *http.
 	}
 
 	serviceId := r.URL.Query().Get("serviceId")
-	taskChan, ok := op.wsConnections[serviceId]
+	serviceConn, ok := op.wsConnections[serviceId]
 	if !ok {
-		log.Printf("Service %s not registered", serviceId)
-
+		log.Printf("ServiceID %s not registered", serviceId)
 		if err := conn.Close(); err != nil {
-			log.Println(err)
+			log.Printf("Error closing connection as after discovering ServiceID %s not registered\n", serviceId)
 			return
 		}
 		return
 	}
 
-	go op.writeLoop(conn, taskChan)
-	go op.readLoop(conn, serviceId)
+	serviceConn.Conn = conn
+	serviceConn.Status = Connected
+
+	go op.writeLoop(serviceConn)
+	go op.readLoop(serviceConn)
 }
 
-func (op *OrchestrationPlatform) writeLoop(conn *websocket.Conn, taskChan <-chan *Task) {
-	for task := range taskChan {
-		if err := conn.WriteJSON(task); err != nil {
+func (op *OrchestrationPlatform) writeLoop(serviceConn *ServiceConnection) {
+	for task := range serviceConn.TaskWorkChan {
+		if serviceConn.Status == Disconnected {
+			// Queue the task or handle the disconnected state
+			continue
+		}
+
+		if err := serviceConn.Conn.WriteJSON(task); err != nil {
 			log.Printf("Failed to send task: %v", err)
+			serviceConn.Status = Disconnected
 			return
 		}
 	}
 }
 
-func (op *OrchestrationPlatform) readLoop(conn *websocket.Conn, serviceId string) {
-	defer func(conn *websocket.Conn) {
-		err := conn.Close()
+func (op *OrchestrationPlatform) readLoop(serviceConn *ServiceConnection) {
+	defer func(sc *ServiceConnection) {
+		err := sc.Conn.Close()
 		if err != nil {
 			log.Println(err)
 		}
-	}(conn)
+		serviceConn.Status = Disconnected
+	}(serviceConn)
 
 	for {
 		var result TaskResult
-		if err := conn.ReadJSON(&result); err != nil {
+		if err := serviceConn.Conn.ReadJSON(&result); err != nil {
 			log.Printf("Failed to read result: %v", err)
-			delete(op.wsConnections, serviceId)
 			return
 		}
 		op.results <- &result
@@ -251,7 +324,7 @@ func main() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/register/project", op.RegisterProject).Methods("POST")
-	r.HandleFunc("/task", APIKeyMiddleware(op.SubmitTask)).Methods("POST")
+	r.HandleFunc("/orchestrations", APIKeyMiddleware(op.OrchestrationsHandler)).Methods("POST")
 	r.HandleFunc("/register/service", APIKeyMiddleware(op.RegisterService)).Methods("POST")
 	r.HandleFunc("/register/agent", APIKeyMiddleware(op.RegisterAgent)).Methods("POST")
 	r.HandleFunc("/ws", op.HandleWebSocket)
