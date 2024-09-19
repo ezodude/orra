@@ -1,48 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 )
-
-type OrchestrationPlatform struct {
-	services      map[string]*ServiceInfo
-	tasks         chan *Task
-	results       chan *TaskResult
-	wsConnections map[string]chan *Task
-	projects      map[string]*Project
-	taskStore     map[string]*Task
-}
-
-type ServiceInfo struct {
-	Name         string          `json:"name"`
-	InputSchema  json.RawMessage `json:"inputSchema"`
-	OutputSchema json.RawMessage `json:"outputSchema"`
-}
-
-type Task struct {
-	ID        string          `json:"id"`
-	Service   string          `json:"service"`
-	Input     json.RawMessage `json:"input"`
-	Status    string          `json:"status"`
-	ProjectID string          `json:"projectId"`
-}
-
-type TaskResult struct {
-	TaskID string          `json:"taskId"`
-	Result json.RawMessage `json:"result"`
-}
-
-type Project struct {
-	ID      string `json:"id"`
-	APIKey  string `json:"apiKey"`
-	Webhook string `json:"webhook"`
-}
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -128,22 +96,79 @@ func (op *OrchestrationPlatform) sendWebhook(projectID string) {
 	log.Printf("Sending webhook for project %s to %s", projectID, project.Webhook)
 }
 
-func (op *OrchestrationPlatform) RegisterService(w http.ResponseWriter, r *http.Request) {
+func (op *OrchestrationPlatform) RegisterProject(w http.ResponseWriter, r *http.Request) {
+	var project Project
+	if err := json.NewDecoder(r.Body).Decode(&project); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	project.ID = uuid.New().String()
+	project.APIKey = uuid.New().String()
+
+	op.projects[project.ID] = &project
+
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(project); err != nil {
+		return
+	}
+}
+
+func (op *OrchestrationPlatform) RegisterServiceOrAgent(w http.ResponseWriter, r *http.Request, serviceType ServiceType) {
+	apiKey := r.Context().Value("api_key").(string)
+	project, err := op.GetProjectByApiKey(apiKey)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	var service ServiceInfo
 	if err := json.NewDecoder(r.Body).Decode(&service); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	op.services[service.Name] = &service
-	op.wsConnections[service.Name] = make(chan *Task, 100)
+	service.ID = uuid.New().String()
+	service.ProjectId = project.ID
+	service.Type = serviceType
+	op.services[service.ID] = &service
+	op.wsConnections[service.ID] = make(chan *Task, 100)
 
-	if err := json.NewEncoder(w).Encode(map[string]string{"status": "registered"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"id":     service.ID,
+		"name":   service.Name,
+		"status": Registered,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func (op *OrchestrationPlatform) RegisterService(w http.ResponseWriter, r *http.Request) {
+	op.RegisterServiceOrAgent(w, r, Service)
+}
+
+func (op *OrchestrationPlatform) RegisterAgent(w http.ResponseWriter, r *http.Request) {
+	op.RegisterServiceOrAgent(w, r, Agent)
+}
+
+func (op *OrchestrationPlatform) SubmitTask(w http.ResponseWriter, r *http.Request) {
+	var task Task
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	task.ID = uuid.New().String()
+	task.Status = Pending
+
+	op.taskStore[task.ID] = &task
+	op.tasks <- &task
+
+	if err := json.NewEncoder(w).Encode(map[string]string{"taskId": task.ID}); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 }
 
 func (op *OrchestrationPlatform) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -153,10 +178,10 @@ func (op *OrchestrationPlatform) HandleWebSocket(w http.ResponseWriter, r *http.
 		return
 	}
 
-	serviceName := r.URL.Query().Get("service")
-	taskChan, ok := op.wsConnections[serviceName]
+	serviceId := r.URL.Query().Get("serviceId")
+	taskChan, ok := op.wsConnections[serviceId]
 	if !ok {
-		log.Printf("Service %s not registered", serviceName)
+		log.Printf("Service %s not registered", serviceId)
 
 		if err := conn.Close(); err != nil {
 			log.Println(err)
@@ -166,7 +191,7 @@ func (op *OrchestrationPlatform) HandleWebSocket(w http.ResponseWriter, r *http.
 	}
 
 	go op.writeLoop(conn, taskChan)
-	go op.readLoop(conn, serviceName)
+	go op.readLoop(conn, serviceId)
 }
 
 func (op *OrchestrationPlatform) writeLoop(conn *websocket.Conn, taskChan <-chan *Task) {
@@ -178,7 +203,7 @@ func (op *OrchestrationPlatform) writeLoop(conn *websocket.Conn, taskChan <-chan
 	}
 }
 
-func (op *OrchestrationPlatform) readLoop(conn *websocket.Conn, serviceName string) {
+func (op *OrchestrationPlatform) readLoop(conn *websocket.Conn, serviceId string) {
 	defer func(conn *websocket.Conn) {
 		err := conn.Close()
 		if err != nil {
@@ -190,7 +215,7 @@ func (op *OrchestrationPlatform) readLoop(conn *websocket.Conn, serviceName stri
 		var result TaskResult
 		if err := conn.ReadJSON(&result); err != nil {
 			log.Printf("Failed to read result: %v", err)
-			delete(op.wsConnections, serviceName)
+			delete(op.wsConnections, serviceId)
 			return
 		}
 		op.results <- &result
