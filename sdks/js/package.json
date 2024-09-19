@@ -1,8 +1,8 @@
 {
   "name": "@orra/sdk",
   "version": "0.0.1",
-  "description": "Orra Javascript SDK",
   "type": "module",
+  "description": "Orra Javascript SDK",
   "main": "./index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -21,5 +21,8 @@
   "bugs": {
     "url": "https://github.com/ezodude/orra/issues"
   },
-  "homepage": "https://github.com/ezodude/orra#readme"
+  "homepage": "https://github.com/ezodude/orra#readme",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
 }
