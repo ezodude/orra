@@ -194,13 +194,11 @@ async function main() {
 			{
 				description: 'Retrieves and manages customer account data',
 				schema: serviceSchema,
-				// Setup a handler function that performs the work for this service or Agent.
-				taskHandler: handler,
 				version: '1.0.0'
 			}
 		);
-		
 		console.log('Service registered successfully');
+		orraClient.startHandler(handler)
 	} catch (error) {
 		console.error('Registration failed:', error);
 	}
