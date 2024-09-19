@@ -13,16 +13,16 @@ class OrraSDK {
 		this.serviceId = null;
 	}
 	
-	async registerService(serviceName, opts = {
+	async #registerServiceOrAgent(name, kind, opts = {
 		description: undefined,
 		schema: undefined,
 		version: '',
 	}) {
-		const response = await fetch(`${this.#apiUrl}/register/service`, {
+		const response = await fetch(`${this.#apiUrl}/register/${kind}`, {
 			method: 'POST', headers: {
 				'Content-Type': 'application/json', 'Authorization': `Bearer ${this.#apiKey}` // Make sure to include the API key
 			}, body: JSON.stringify({
-				name: serviceName,
+				name: name,
 				description: opts?.description,
 				schema: opts?.schema
 			}),
@@ -41,6 +41,22 @@ class OrraSDK {
 		
 		this.#setupWebSocket(this.serviceId);
 		return this
+	}
+	
+	async registerService(name, opts = {
+		description: undefined,
+		schema: undefined,
+		version: '',
+	}) {
+		return this.#registerServiceOrAgent(name, "service", opts)
+	}
+	
+	async registerAgent(name, opts = {
+		description: undefined,
+		schema: undefined,
+		version: '',
+	}) {
+		return this.#registerServiceOrAgent(name, "agent", opts)
 	}
 	
 	#setupWebSocket(serviceId) {
