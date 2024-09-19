@@ -197,42 +197,27 @@ func (op *OrchestrationPlatform) readLoop(conn *websocket.Conn, serviceName stri
 	}
 }
 
-func (op *OrchestrationPlatform) SubmitTask(w http.ResponseWriter, r *http.Request) {
-	var task Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+func APIKeyMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header is missing", http.StatusUnauthorized)
+			return
+		}
 
-	task.ID = uuid.New().String()
-	task.Status = "pending"
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid Authorization header format", http.StatusUnauthorized)
+			return
+		}
 
-	op.taskStore[task.ID] = &task
-	op.tasks <- &task
+		apiKey := parts[1]
 
-	if err := json.NewEncoder(w).Encode(map[string]string{"taskId": task.ID}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+		// Store the API key in the request context
+		ctx := context.WithValue(r.Context(), "api_key", apiKey)
+		r = r.WithContext(ctx)
 
-	w.WriteHeader(http.StatusAccepted)
-}
-
-func (op *OrchestrationPlatform) RegisterProject(w http.ResponseWriter, r *http.Request) {
-	var project Project
-	if err := json.NewDecoder(r.Body).Decode(&project); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	project.ID = uuid.New().String()
-	project.APIKey = uuid.New().String()
-
-	op.projects[project.ID] = &project
-
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(project); err != nil {
-		return
+		next.ServeHTTP(w, r)
 	}
 }
 
@@ -240,10 +225,11 @@ func main() {
 	op := NewOrchestrationPlatform()
 
 	r := mux.NewRouter()
-	r.HandleFunc("/register/service", op.RegisterService).Methods("POST")
 	r.HandleFunc("/register/project", op.RegisterProject).Methods("POST")
+	r.HandleFunc("/task", APIKeyMiddleware(op.SubmitTask)).Methods("POST")
+	r.HandleFunc("/register/service", APIKeyMiddleware(op.RegisterService)).Methods("POST")
+	r.HandleFunc("/register/agent", APIKeyMiddleware(op.RegisterAgent)).Methods("POST")
 	r.HandleFunc("/ws", op.HandleWebSocket)
-	r.HandleFunc("/task", op.SubmitTask).Methods("POST")
 
 	log.Println("Starting server on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
