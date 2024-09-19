@@ -3,12 +3,14 @@ class OrraSDK {
 	#apiKey;
 	#ws;
 	#taskHandler;
+	serviceId;
 	
 	constructor(apiUrl, apiKey) {
 		this.#apiUrl = apiUrl;
 		this.#apiKey = apiKey;
 		this.#ws = null;
 		this.#taskHandler = null;
+		this.serviceId = null;
 	}
 	
 	async registerService(serviceName, opts = {
@@ -29,12 +31,20 @@ class OrraSDK {
 		if (!response.ok) {
 			throw new Error(`Failed to register service: ${response.statusText}`);
 		}
-		this.#setupWebSocket(serviceName);
+		
+		const data = await response.json();
+		
+		this.serviceId = data.id;
+		if (this.serviceId) {
+			throw new Error('Service ID was not received after registering the service');
+		}
+		
+		this.#setupWebSocket(this.serviceId);
 		return this
 	}
 	
-	#setupWebSocket(serviceName) {
-		this.ws = new WebSocket(`${this.#apiUrl.replace('http', 'ws')}/ws?service=${serviceName}`);
+	#setupWebSocket(serviceId) {
+		this.ws = new WebSocket(`${this.#apiUrl.replace('http', 'ws')}/ws?serviceId=${serviceId}`);
 		
 		this.ws.onmessage = async (event) => {
 			if (!this.#taskHandler) return;
@@ -55,7 +65,7 @@ class OrraSDK {
 		
 		this.ws.onclose = () => {
 			console.log('WebSocket closed. Attempting to reconnect...');
-			setTimeout(() => this.#setupWebSocket(serviceName), 5000);
+			setTimeout(() => this.#setupWebSocket(serviceId), 5000);
 		};
 	}
 	
@@ -71,8 +81,7 @@ class OrraSDK {
 }
 
 export function createClient(config = {
-	orraUrl: undefined,
-	orraKey: undefined
+	orraUrl: undefined, orraKey: undefined
 }) {
 	if (!config?.orraUrl || config?.orraKey) {
 		throw "Cannot create an SDK client: ensure both a valid Orra URL and Orra API Key have been provided."
