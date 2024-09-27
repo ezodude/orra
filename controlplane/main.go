@@ -427,7 +427,7 @@ Generate the execution plan:`, strings.Join(serviceDescriptions, "\n\n"), action
 	return prompt, nil
 }
 
-func (op *OrchestrationPlatform) RegisterProject(w http.ResponseWriter, r *http.Request) {
+func (app *App) RegisterProject(w http.ResponseWriter, r *http.Request) {
 	var project Project
 	if err := json.NewDecoder(r.Body).Decode(&project); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -437,7 +437,7 @@ func (op *OrchestrationPlatform) RegisterProject(w http.ResponseWriter, r *http.
 	project.ID = uuid.New().String()
 	project.APIKey = uuid.New().String()
 
-	op.projects[project.ID] = &project
+	app.op.projects[project.ID] = &project
 
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(project); err != nil {
@@ -446,9 +446,9 @@ func (op *OrchestrationPlatform) RegisterProject(w http.ResponseWriter, r *http.
 	}
 }
 
-func (op *OrchestrationPlatform) RegisterServiceOrAgent(w http.ResponseWriter, r *http.Request, serviceType ServiceType) {
+func (app *App) RegisterServiceOrAgent(w http.ResponseWriter, r *http.Request, serviceType ServiceType) {
 	apiKey := r.Context().Value("api_key").(string)
-	project, err := op.GetProjectByApiKey(apiKey)
+	project, err := app.op.GetProjectByApiKey(apiKey)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -465,8 +465,8 @@ func (op *OrchestrationPlatform) RegisterServiceOrAgent(w http.ResponseWriter, r
 	service.Type = serviceType
 
 	// need a better to add services that avoid duplicating service registration
-	op.services[project.ID] = append(op.services[project.ID], &service)
-	op.wsConnections[service.ID] = &ServiceConnection{
+	app.op.services[project.ID] = append(app.op.services[project.ID], &service)
+	app.op.wsConnections[service.ID] = &ServiceConnection{
 		Status: Disconnected,
 	}
 
@@ -480,17 +480,17 @@ func (op *OrchestrationPlatform) RegisterServiceOrAgent(w http.ResponseWriter, r
 	}
 }
 
-func (op *OrchestrationPlatform) RegisterService(w http.ResponseWriter, r *http.Request) {
-	op.RegisterServiceOrAgent(w, r, Service)
+func (app *App) RegisterService(w http.ResponseWriter, r *http.Request) {
+	app.RegisterServiceOrAgent(w, r, Service)
 }
 
-func (op *OrchestrationPlatform) RegisterAgent(w http.ResponseWriter, r *http.Request) {
-	op.RegisterServiceOrAgent(w, r, Agent)
+func (app *App) RegisterAgent(w http.ResponseWriter, r *http.Request) {
+	app.RegisterServiceOrAgent(w, r, Agent)
 }
 
-func (op *OrchestrationPlatform) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *App) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
 	apiKey := r.Context().Value("api_key").(string)
-	project, err := op.GetProjectByApiKey(apiKey)
+	project, err := app.op.GetProjectByApiKey(apiKey)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -506,13 +506,13 @@ func (op *OrchestrationPlatform) OrchestrationsHandler(w http.ResponseWriter, r 
 	orchestration.Status = Pending
 	orchestration.ProjectID = project.ID
 
-	op.orchestrationStore[orchestration.ID] = &orchestration
-	op.prepareOrchestration(&orchestration)
+	app.op.orchestrationStore[orchestration.ID] = &orchestration
+	app.op.prepareOrchestration(&orchestration)
 
 	if orchestration.Status == NotActionable || orchestration.Status == Failed {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 	} else {
-		go op.executeOrchestration(&orchestration)
+		go app.op.executeOrchestration(&orchestration)
 		w.WriteHeader(http.StatusAccepted)
 	}
 
@@ -528,7 +528,7 @@ func (op *OrchestrationPlatform) OrchestrationsHandler(w http.ResponseWriter, r 
 	}
 }
 
-func (op *OrchestrationPlatform) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (app *App) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -536,8 +536,8 @@ func (op *OrchestrationPlatform) HandleWebSocket(w http.ResponseWriter, r *http.
 	}
 
 	serviceId := r.URL.Query().Get("serviceId")
-	op.mu.Lock()
-	serviceConn, ok := op.wsConnections[serviceId]
+	app.op.mu.Lock()
+	serviceConn, ok := app.op.wsConnections[serviceId]
 	if !ok {
 		log.Printf("ServiceID %s not registered", serviceId)
 		if err := conn.Close(); err != nil {
@@ -549,7 +549,7 @@ func (op *OrchestrationPlatform) HandleWebSocket(w http.ResponseWriter, r *http.
 	serviceConn.Conn = conn
 	serviceConn.Status = Connected
 
-	op.mu.Unlock()
+	app.op.mu.Unlock()
 }
 
 func APIKeyMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -576,6 +576,34 @@ func APIKeyMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+type App struct {
+	op     *OrchestrationPlatform
+	router *mux.Router
+	port   int
+}
+
+func NewApp(oPlatform *OrchestrationPlatform, router *mux.Router, port int) *App {
+	return &App{
+		op:     oPlatform,
+		router: router,
+		port:   port,
+	}
+}
+
+func (app *App) configureRoutes() *App {
+	app.router.HandleFunc("/register/project", app.RegisterProject).Methods("POST")
+	app.router.HandleFunc("/register/service", APIKeyMiddleware(app.RegisterService)).Methods("POST")
+	app.router.HandleFunc("/orchestrations", APIKeyMiddleware(app.OrchestrationsHandler)).Methods("POST")
+	app.router.HandleFunc("/register/agent", APIKeyMiddleware(app.RegisterAgent)).Methods("POST")
+	app.router.HandleFunc("/ws", app.HandleWebSocket)
+	return app
+}
+
+func (app *App) run() error {
+	log.Printf("Starting server on :%d\n", app.port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", app.port), app.router)
+}
+
 func main() {
 	cfg, err := Load()
 	if err != nil {
@@ -583,14 +611,7 @@ func main() {
 	}
 
 	op := NewOrchestrationPlatform(cfg.OpenApiKey)
-
 	r := mux.NewRouter()
-	r.HandleFunc("/register/project", op.RegisterProject).Methods("POST")
-	r.HandleFunc("/register/service", APIKeyMiddleware(op.RegisterService)).Methods("POST")
-	r.HandleFunc("/orchestrations", APIKeyMiddleware(op.OrchestrationsHandler)).Methods("POST")
-	r.HandleFunc("/register/agent", APIKeyMiddleware(op.RegisterAgent)).Methods("POST")
-	r.HandleFunc("/ws", op.HandleWebSocket)
-
-	log.Printf("Starting server on :%d\n", cfg.Port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), r))
+	app := NewApp(op, r, cfg.Port).configureRoutes()
+	log.Fatal(app.run())
 }
