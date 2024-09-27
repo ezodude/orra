@@ -21,7 +21,7 @@ const orra = createClient(config);
 
 // Service details
 const serviceName = 'EchoService';
-const serviceDescription = 'A simple service that echoes back the input it receives';
+const serviceDescription = 'A simple service that echoes back the first input value it receives.';
 const serviceSchema = {
 	input: {
 		type: 'object',
