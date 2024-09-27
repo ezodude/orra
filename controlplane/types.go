@@ -2,124 +2,90 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-type ServiceConnection struct {
-	TaskWorkChan chan *Task
-	Status       ServiceStatus
-	Conn         *websocket.Conn
-}
-
-type ServiceStatus int
-
-const (
-	Disconnected ServiceStatus = iota
-	Connected
-)
-
-type OrchestrationPlatform struct {
-	tasks              chan *Task
-	results            chan *TaskResult
-	wsConnections      map[string]*ServiceConnection
+type ControlPlane struct {
 	projects           map[string]*Project
 	services           map[string][]*ServiceInfo
 	orchestrationStore map[string]*Orchestration
-	taskStore          map[string]*Task
+	wsConnections      map[string]*ServiceConnection
+	openAIKey          string
+	mu                 sync.Mutex
 }
 
-func (op *OrchestrationPlatform) GetProjectByApiKey(key string) (*Project, error) {
-	apiKeyToProjectID := make(map[string]string)
-	for id, project := range op.projects {
-		apiKeyToProjectID[project.APIKey] = id
-	}
-
-	if projectID, exists := apiKeyToProjectID[key]; exists {
-		return op.projects[projectID], nil
-	} else {
-		return nil, fmt.Errorf("no project found with the given API key: %s", key)
-	}
+type Project struct {
+	ID      string `json:"id"`
+	APIKey  string `json:"apiKey"`
+	Webhook string `json:"webhook"`
 }
 
-type Status int
-
-const (
-	Registered Status = iota
-	Pending    Status = iota
-	Processing Status = iota
-	Completed  Status = iota
-)
-
-func (s *Status) String() string {
-	return [...]string{"registered", "pending", "processing", "completed"}[*s]
+type ServiceConnection struct {
+	Status ServiceStatus
+	Conn   *websocket.Conn
 }
 
-func (s *Status) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.String())
+type Orchestrator struct {
+	tasks       map[string]*Task
+	results     map[string]json.RawMessage
+	tasksMu     sync.RWMutex
+	resultsMu   sync.RWMutex
+	wsConns     map[string]*ServiceConnection
+	wsConnsMu   sync.RWMutex
+	taskCount   int32
+	resultCount int32
 }
 
-func (s *Status) UnmarshalJSON(data []byte) error {
-	var val string
-	if err := json.Unmarshal(data, &val); err != nil {
-		return err
-	}
-	switch strings.ToLower(strings.TrimSpace(val)) {
-	case "registered":
-		*s = Registered
-	case "pending":
-		*s = Pending
-	case "processing":
-		*s = Processing
-	case "completed":
-		*s = Completed
-	default:
-		return fmt.Errorf("invalid Status: %+v", s)
-	}
-	return nil
+type Task struct {
+	ID              string          `json:"id"`
+	Input           json.RawMessage `json:"input"`
+	ServiceID       string          `json:"-"`
+	OrchestrationID string          `json:"-"`
+	ProjectID       string          `json:"-"`
+	Status          Status          `json:"-"`
 }
 
-type ServiceType int
+// Source is either user input or the subtask Id of where the value is expected from
+type Source string
 
-const (
-	Agent ServiceType = iota
-	Service
-)
-
-func (ss *ServiceType) String() string {
-	return [...]string{"agent", "service"}[*ss]
+type Spec struct {
+	Type       string     `json:"type"`
+	Properties Properties `json:"properties,omitempty"`
+	Required   []string   `json:"required,omitempty"`
+	Format     string     `json:"format,omitempty"`
+	Minimum    int        `json:"minimum,omitempty"`
+	Maximum    int        `json:"maximum,omitempty"`
 }
 
-func (ss *ServiceType) MarshalJSON() ([]byte, error) {
-	return json.Marshal(ss.String())
-}
+type Properties map[string]Spec
 
-func (ss *ServiceType) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "agent":
-		*ss = Agent
-	case "service":
-		*ss = Service
-	default:
-		return fmt.Errorf("invalid ServiceType: %s", s)
-	}
-	return nil
+type ServiceSchema struct {
+	Input  Spec `json:"input"`
+	Output Spec `json:"output"`
 }
 
 type ServiceInfo struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	Schema      json.RawMessage `json:"schema"`
-	Type        ServiceType     `json:"type"`
-	ProjectID   string          `json:"-"`
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Schema      ServiceSchema `json:"schema"`
+	Type        ServiceType   `json:"type"`
+	ProjectID   string        `json:"-"`
+}
+
+type Orchestration struct {
+	ID        string              `json:"id"`
+	ProjectID string              `json:"-"`
+	Action    Action              `json:"action"`
+	Params    ActionParams        `json:"data"`
+	Plan      *ServiceCallingPlan `json:"plan"`
+	Results   []json.RawMessage   `json:"results"`
+	Status    Status              `json:"status"`
+	Error     string              `json:"error"`
+	Timestamp time.Time           `json:"timestamp"`
 }
 
 type Action struct {
@@ -127,37 +93,27 @@ type Action struct {
 	Content string `json:"content"`
 }
 
-type ActionData struct {
+type ActionParams []ActionParam
+
+type ActionParam struct {
 	Field string `json:"field"`
 	Value string `json:"value"`
 }
 
-type Orchestration struct {
-	ID        string            `json:"id"`
-	Action    Action            `json:"action"`
-	Data      []ActionData      `json:"data"`
-	Status    Status            `json:"status"`
-	Timestamp time.Time         `json:"timestamp"`
-	ProjectID string            `json:"-"`
-	Results   []json.RawMessage `json:"-"`
+// ServiceCallingPlan represents the execution plan for services and agents
+type ServiceCallingPlan struct {
+	ProjectID      string          `json:"-"`
+	Tasks          []*SubTask      `json:"tasks"`
+	ParallelGroups []ParallelGroup `json:"parallel_groups"`
 }
 
-type Task struct {
-	ID              string          `json:"id"`
-	ServiceID       string          `json:"-"`
-	OrchestrationID string          `json:"-"`
-	ProjectID       string          `json:"-"`
-	Input           json.RawMessage `json:"input"`
-	Status          Status          `json:"status"`
-}
+type ParallelGroup []string
 
-type TaskResult struct {
-	TaskID string          `json:"taskId"`
-	Result json.RawMessage `json:"result"`
-}
-
-type Project struct {
-	ID      string `json:"id"`
-	APIKey  string `json:"apiKey"`
-	Webhook string `json:"webhook"`
+// SubTask represents a single task in the ServiceCallingPlan
+type SubTask struct {
+	ID      string            `json:"id"`
+	Service string            `json:"service"`
+	Input   map[string]Source `json:"input"`
+	Status  Status            `json:"status,omitempty"`
+	Error   string            `json:"error,omitempty"`
 }
