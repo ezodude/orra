@@ -37,7 +37,8 @@ class OrraSDK {
 		});
 		
 		if (!response.ok) {
-			throw new Error(`Failed to register ${kind}: ${response.statusText}`);
+			const resText = await response.text()
+			throw new Error(`Failed to register ${kind} because of ${response.statusText}: ${resText}`);
 		}
 		
 		const data = await response.json();
