@@ -46,7 +46,7 @@ async function handleTask(task) {
 	console.log('Received task:', task);
 	
 	// Extract the message from the task input
-	const customerId  = task.input;
+	const { customerId }  = task.input;
 	
 	// Send back customer data
 	const result = {
