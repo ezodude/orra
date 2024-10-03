@@ -16,14 +16,14 @@ import (
 )
 
 type App struct {
-	op     *ControlPlane
+	plane  *ControlPlane
 	router *mux.Router
 	port   int
 }
 
-func NewApp(oPlatform *ControlPlane, router *mux.Router, port int) *App {
+func NewApp(plane *ControlPlane, router *mux.Router, port int) *App {
 	return &App{
-		op:     oPlatform,
+		plane:  plane,
 		router: router,
 		port:   port,
 	}
@@ -83,7 +83,7 @@ func (app *App) RegisterProject(w http.ResponseWriter, r *http.Request) {
 	project.ID = uuid.New().String()
 	project.APIKey = uuid.New().String()
 
-	app.op.projects[project.ID] = &project
+	app.plane.projects[project.ID] = &project
 
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(project); err != nil {
@@ -94,7 +94,7 @@ func (app *App) RegisterProject(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) RegisterServiceOrAgent(w http.ResponseWriter, r *http.Request, serviceType ServiceType) {
 	apiKey := r.Context().Value("api_key").(string)
-	project, err := app.op.GetProjectByApiKey(apiKey)
+	project, err := app.plane.GetProjectByApiKey(apiKey)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -111,10 +111,12 @@ func (app *App) RegisterServiceOrAgent(w http.ResponseWriter, r *http.Request, s
 	service.Type = serviceType
 
 	// need a better to add services that avoid duplicating service registration
-	app.op.services[project.ID] = append(app.op.services[project.ID], &service)
-	app.op.wsConnections[service.ID] = &ServiceConnection{
+	app.plane.services[project.ID] = append(app.plane.services[project.ID], &service)
+	app.plane.wsConnectionsMutex.Lock()
+	app.plane.wsConnections[service.ID] = &ServiceConnection{
 		Status: Disconnected,
 	}
+	app.plane.wsConnectionsMutex.Unlock()
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"id":     service.ID,
@@ -136,7 +138,7 @@ func (app *App) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
 	apiKey := r.Context().Value("api_key").(string)
-	project, err := app.op.GetProjectByApiKey(apiKey)
+	project, err := app.plane.GetProjectByApiKey(apiKey)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -152,13 +154,13 @@ func (app *App) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
 	orchestration.Status = Pending
 	orchestration.ProjectID = project.ID
 
-	app.op.orchestrationStore[orchestration.ID] = &orchestration
-	app.op.prepareOrchestration(&orchestration)
+	app.plane.orchestrationStore[orchestration.ID] = &orchestration
+	app.plane.prepareOrchestration(&orchestration)
 
 	if orchestration.Status == NotActionable || orchestration.Status == Failed {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 	} else {
-		go app.op.executeOrchestration(&orchestration)
+		go app.plane.executeOrchestration(&orchestration)
 		w.WriteHeader(http.StatusAccepted)
 	}
 
@@ -182,8 +184,8 @@ func (app *App) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serviceId := r.URL.Query().Get("serviceId")
-	app.op.mu.Lock()
-	serviceConn, ok := app.op.wsConnections[serviceId]
+	app.plane.wsConnectionsMutex.Lock()
+	serviceConn, ok := app.plane.wsConnections[serviceId]
 	if !ok {
 		log.Printf("ServiceID %s not registered", serviceId)
 		if err := conn.Close(); err != nil {
@@ -195,7 +197,7 @@ func (app *App) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	serviceConn.Conn = conn
 	serviceConn.Status = Connected
 
-	app.op.mu.Unlock()
+	app.plane.wsConnectionsMutex.Unlock()
 }
 
 func main() {

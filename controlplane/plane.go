@@ -210,7 +210,10 @@ func (p *ControlPlane) executeOrchestration(orchestration *Orchestration) {
 
 func (p *ControlPlane) executePlan(orchestration *Orchestration) {
 	tm := NewOrchestrator()
+
+	p.wsConnectionsMutex.RLock()
 	tm.wsConns = p.wsConnections
+	p.wsConnectionsMutex.RUnlock()
 
 	for _, group := range orchestration.Plan.ParallelGroups {
 		if err := tm.executeParallelGroup(group, orchestration); err != nil {
@@ -346,16 +349,30 @@ func (o *Orchestrator) prepareInput(input map[string]Source) (map[string]json.Ra
 	defer o.resultsMu.RUnlock()
 
 	prepared := make(map[string]json.RawMessage)
-	for key, source := range input {
-		if strings.HasPrefix(string(source), "$") {
-			taskID := strings.TrimPrefix(string(source), "$")
-			result, ok := o.results[taskID]
+	for key, value := range input {
+		if strings.HasPrefix(string(value), "$") {
+			parts := strings.Split(strings.TrimPrefix(string(value), "$"), ".")
+			taskID, sourceID := parts[0], parts[1]
+
+			rawSource, ok := o.results[taskID]
 			if !ok {
 				return nil, fmt.Errorf("result for task %s not found", taskID)
 			}
-			prepared[key] = result
+
+			var sourceData map[string]any
+			err := json.Unmarshal(rawSource, &sourceData)
+			if err != nil {
+				return nil, err
+			}
+
+			sourceValue, ok := sourceData[sourceID]
+			if !ok {
+				return nil, fmt.Errorf("result for %s.%s not found", taskID, sourceID)
+			}
+
+			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, sourceValue))
 		} else {
-			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, source))
+			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, value))
 		}
 	}
 
@@ -365,7 +382,7 @@ func (o *Orchestrator) prepareInput(input map[string]Source) (map[string]json.Ra
 func (o *Orchestrator) executeTask(task *Task) error {
 	svcConn := o.getServiceConnection(task.ServiceID)
 	if svcConn == nil {
-		return fmt.Errorf("ServiceID %s not connected", task.ServiceID)
+		return fmt.Errorf("ServiceID %s has no connection", task.ServiceID)
 	}
 
 	task.Status = Processing
@@ -413,6 +430,7 @@ func (o *Orchestrator) handleTaskExecution(svcConn *ServiceConnection, task *Tas
 func (o *Orchestrator) setResult(taskID string, result json.RawMessage) {
 	o.resultsMu.Lock()
 	o.results[taskID] = result
+	log.Printf("o.results: %+v\n", o.results)
 	o.resultsMu.Unlock()
 	atomic.AddInt32(&o.resultCount, 1)
 }
