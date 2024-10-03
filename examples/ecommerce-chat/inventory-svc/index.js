@@ -54,7 +54,7 @@ async function handleTask(task) {
 	const result = {
 		productId: '697d1744-88dd-4139-beeb-b307dfb1a2f9',
 		productDescription: productDescription,
-		availability: 'AVAILABLE',
+		productAvailability: 'AVAILABLE',
 		warehouseAddress: 'Unit 1 Cairnrobin Way, Portlethen, Aberdeen AB12 4NJ'
 	};
 	
