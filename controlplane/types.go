@@ -13,8 +13,8 @@ type ControlPlane struct {
 	services           map[string][]*ServiceInfo
 	orchestrationStore map[string]*Orchestration
 	wsConnections      map[string]*ServiceConnection
+	wsConnectionsMutex sync.RWMutex
 	openAIKey          string
-	mu                 sync.Mutex
 }
 
 type Project struct {
@@ -84,7 +84,7 @@ type Orchestration struct {
 	Plan      *ServiceCallingPlan `json:"plan"`
 	Results   []json.RawMessage   `json:"results"`
 	Status    Status              `json:"status"`
-	Error     string              `json:"error"`
+	Error     string              `json:"error,omitempty"`
 	Timestamp time.Time           `json:"timestamp"`
 }
 
