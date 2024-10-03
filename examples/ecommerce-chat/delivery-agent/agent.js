@@ -248,7 +248,7 @@ Ensure you consider the following conditions:
 - Vehicle performance capabilities
 - Potential for additional unforeseen delays
 
-This specifically for customer with ID: ${opts?.customerId} and customer name: ${opts?.customerName}
+This is specifically for customer with ID: ${opts?.customerId} and customer name: ${opts?.customerName}
 
 The requested product details are: ${opts?.productDescription}
 
