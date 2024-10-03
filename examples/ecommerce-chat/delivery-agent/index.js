@@ -12,7 +12,7 @@ const sdkConfig = {
 };
 
 // Validate environment variables
-if (!sdkConfig.orraUrl || !sdkConfig.orraKey || !mistralApiKey) {
+if (!sdkConfig.orraUrl || !sdkConfig.orraKey) {
 	console.error('Error: ORRA_URL, ORRA_KEY and MISTRAL_API_KEY must be set in the environment variables');
 	process.exit(1);
 }
@@ -21,13 +21,14 @@ if (!sdkConfig.orraUrl || !sdkConfig.orraKey || !mistralApiKey) {
 const orra = createClient(sdkConfig);
 
 // Service details
-const serviceName = 'DeliveryAgent';
-const serviceDescription = 'An agent that helps customers with estimated delivery dates for online shopping.';
-const serviceSchema = {
+const agentName = 'DeliveryAgent';
+const agentDescription = 'An agent that helps customers with estimated delivery dates for online shopping.';
+const agentSchema = {
 	input: {
 		type: 'object',
 		properties: {
 			customerId: { type: 'string' },
+			customerName: { type: 'string' },
 			customerAddress: { type: 'string' },
 			productDescription: { type: 'string' },
 			productAvailability: { type: 'string' },
@@ -57,7 +58,8 @@ async function handleTask(task) {
 		productAvailability,
 		warehouseAddress
 	} = task.input;
-
+	
+	console.log('Running agent:', agentName)
 	const response = await runAgent({
 		customerId,
 		customerName,
@@ -79,18 +81,18 @@ async function handleTask(task) {
 async function main() {
 	try {
 		// Register the service
-		await orra.registerService(serviceName, {
-			description: serviceDescription,
-			schema: serviceSchema
+		await orra.registerAgent(agentName, {
+			description: agentDescription,
+			schema: agentSchema
 		});
-		console.log('Service registered successfully');
+		console.log(agentName, ' registered successfully');
 		
 		// Start the task handler
 		orra.startHandler(handleTask);
 		console.log('Task handler started');
 		
 	} catch (error) {
-		console.error('Error setting up the service:', error);
+		console.error('Error setting up the agent:', error);
 	}
 }
 
