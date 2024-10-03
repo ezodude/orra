@@ -48,7 +48,7 @@ async function handleTask(task) {
 	console.log('Received task:', task);
 	
 	// Extract the productDescription from the task input
-	const productDescription  = task.input;
+	const { productDescription }  = task.input;
 	
 	// Send back product data
 	const result = {
