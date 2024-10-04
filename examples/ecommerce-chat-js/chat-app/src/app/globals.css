@@ -47,6 +47,7 @@ body {
 
 .json-key {
   color: #881391;
+  font-weight: bold;
 }
 
 .json-value {

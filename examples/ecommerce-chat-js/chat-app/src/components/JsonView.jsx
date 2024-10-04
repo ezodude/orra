@@ -11,7 +11,12 @@ const JsonView = ({ data }) => {
 		if (typeof value === 'object' && value !== null) {
 			return renderObject(value, key, path);
 		}
-		return <span className="json-value">{JSON.stringify(value)}</span>;
+		return (
+			<div className="json-pair">
+				<span className="json-key">{key}: </span>
+				<span className="json-value">{JSON.stringify(value)}</span>
+			</div>
+		);
 	};
 	
 	const renderObject = (obj, key, path = '') => {
@@ -27,16 +32,13 @@ const JsonView = ({ data }) => {
 	        className="json-toggle"
 	        onClick={() => toggleExpand(currentPath)}
         >
-          {isExpanded ? '▼' : '▶'} {key}:
+          {isExpanded ? '▼' : '▶'}
+	        {key !== 'root' && <span className="json-key">{key}: </span>}
 	        {isArray ? '[' : '{'}
         </span>
 				{isExpanded && !isEmpty ? (
 					<div className="json-nested">
-						{Object.entries(obj).map(([k, v]) => (
-							<div key={k} className="json-pair">
-								{renderValue(v, k, currentPath)}
-							</div>
-						))}
+						{Object.entries(obj).map(([k, v]) => renderValue(v, k, currentPath))}
 					</div>
 				) : null}
 				{isExpanded ? (
