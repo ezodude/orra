@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -116,7 +119,7 @@ func (p *ControlPlane) decomposeAction(orchestration *Orchestration, services []
 
 	client := openai.NewClient(p.openAIKey)
 	resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: openai.GPT4o20240806,
+		Model: openai.GPT4oLatest,
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleUser,
@@ -165,6 +168,23 @@ func (p *ControlPlane) validateInput(services []*ServiceInfo, subTasks []*SubTas
 	return nil
 }
 
+func (p *ControlPlane) addServiceDetails(services []*ServiceInfo, subTasks []*SubTask) error {
+	serviceMap := make(map[string]*ServiceInfo)
+	for _, service := range services {
+		serviceMap[service.ID] = service
+	}
+
+	for _, subTask := range subTasks {
+		service, ok := serviceMap[subTask.Service]
+		if !ok {
+			return fmt.Errorf("service %s not found for subtask %s", subTask.Service, subTask.ID)
+		}
+		subTask.ServiceDetails = service.String()
+	}
+
+	return nil
+}
+
 func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 	services, err := p.discoverProjectServices(orchestration.ProjectID)
 	if err != nil {
@@ -189,10 +209,15 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 		return
 	}
 
-	err = p.validateInput(services, callingPlan.Tasks)
-	if err != nil {
+	if err = p.validateInput(services, callingPlan.Tasks); err != nil {
 		orchestration.Status = Failed
 		orchestration.Error = fmt.Sprintf("Error validating plan input/output: %s", err.Error())
+		return
+	}
+
+	if err := p.addServiceDetails(services, callingPlan.Tasks); err != nil {
+		orchestration.Status = Failed
+		orchestration.Error = fmt.Sprintf("Error adding service details to calling plan: %s", err.Error())
 		return
 	}
 
@@ -205,7 +230,11 @@ func (p *ControlPlane) cannotExecuteAction(subTasks []*SubTask) bool {
 
 func (p *ControlPlane) executeOrchestration(orchestration *Orchestration) {
 	p.executePlan(orchestration)
-	p.triggerWebhook(orchestration)
+	err := p.triggerWebhook(orchestration)
+	if err != nil {
+		log.Printf("Error triggering webhook: %v", err)
+		return
+	}
 }
 
 func (p *ControlPlane) executePlan(orchestration *Orchestration) {
@@ -238,19 +267,62 @@ func (p *ControlPlane) executePlan(orchestration *Orchestration) {
 	log.Printf("Plan execution completed successfully for orchestration %s", orchestration.ID)
 }
 
-func (p *ControlPlane) triggerWebhook(orchestration *Orchestration) {
+func (p *ControlPlane) triggerWebhook(orchestration *Orchestration) error {
 	project, ok := p.projects[orchestration.ProjectID]
 	if !ok {
 		log.Printf("Project %s not found", orchestration.ProjectID)
 	}
 
-	data, err := json.Marshal(orchestration)
-	if err != nil {
-		log.Printf("Failed to trigger webhook for projectID %s and orchestrationID %s", orchestration.ProjectID, orchestration.ID)
+	var resultInfo = struct {
+		Results []json.RawMessage `json:"results"`
+		Status  Status            `json:"status"`
+		Error   string            `json:"error,omitempty"`
+	}{
+		Results: orchestration.Results,
+		Status:  orchestration.Status,
+		Error:   orchestration.Error,
 	}
 
-	// Placeholder: Implement webhook sending logic
-	log.Printf("Triggering webhook %s for project %s to send results:\n %s\n", project.Webhook, project.ID, data)
+	payload, err := json.Marshal(resultInfo)
+	if err != nil {
+		return fmt.Errorf("failed to trigger webhook failed to marshal payload: %w", err)
+	}
+
+	log.Printf("Triggering webhook %s for project %s to send results:\n %s\n", project.Webhook, project.ID, payload)
+
+	// Create a new request
+	req, err := http.NewRequest("POST", project.Webhook, bytes.NewBuffer(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "YourAppName/1.0")
+
+	// Create an HTTP client with a timeout
+	client := &http.Client{
+		Timeout: time.Second * 10,
+	}
+
+	// Send the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Failed to close response body: %v", err)
+		}
+	}(resp.Body)
+
+	// Check the response status
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func (p *ControlPlane) GetProjectByApiKey(key string) (*Project, error) {
@@ -393,6 +465,9 @@ func (o *Orchestrator) executeTask(task *Task) error {
 
 	select {
 	case result := <-resultChan:
+		if len(result) < 1 {
+			return fmt.Errorf("task %s execution failed with empty result [%s]", task.ID, string(result))
+		}
 		o.setResult(task.ID, result)
 		return nil
 	case err := <-errChan:
@@ -430,7 +505,6 @@ func (o *Orchestrator) handleTaskExecution(svcConn *ServiceConnection, task *Tas
 func (o *Orchestrator) setResult(taskID string, result json.RawMessage) {
 	o.resultsMu.Lock()
 	o.results[taskID] = result
-	log.Printf("o.results: %+v\n", o.results)
 	o.resultsMu.Unlock()
 	atomic.AddInt32(&o.resultCount, 1)
 }
@@ -458,6 +532,10 @@ func (a ActionParams) String() (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func (si *ServiceInfo) String() string {
+	return fmt.Sprintf("[%s] %s - %s", si.Type.String(), si.Name, si.Description)
 }
 
 func sanitizeJSONOutput(input string) string {
