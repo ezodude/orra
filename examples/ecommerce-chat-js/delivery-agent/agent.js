@@ -1,4 +1,5 @@
 import { Mistral } from "@mistralai/mistralai";
+import { setTimeout } from "timers/promises";
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -16,6 +17,9 @@ if (!mistralApiKey) {
 // const sampleUserAction = 'I am interested in this product when can I receive it?'
 // const customerId = '1111'
 // const productDescription = 'Peanuts collectible Swatch with red straps.'
+
+const MAX_RETRIES = 5;
+const INITIAL_BACKOFF = 1000; // 1 second
 
 const mistral = new Mistral({ apiKey: mistralApiKey });
 
@@ -310,22 +314,40 @@ function extractAndParseJson(input) {
 	}
 }
 
-export async function runAgent(opts){
+async function retryWithBackoff(fn, retries = 0) {
+	try {
+		return await fn();
+	} catch (error) {
+		if (error.statusCode === 429 && retries < MAX_RETRIES) {
+			const backoff = INITIAL_BACKOFF * Math.pow(2, retries);
+			console.log(`Rate limit hit. Retrying in ${backoff}ms...`);
+			await setTimeout(backoff);
+			return retryWithBackoff(fn, retries + 1);
+		}
+		throw error;
+	}
+}
+
+export async function runAgent(opts) {
 	const prompt = createPrompt(opts);
 	
 	const messages = [
-		{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }
+		{ role: 'system', content: systemPrompt },
+		{ role: 'user', content: prompt }
 	];
 	
-	let response = await mistral.chat.complete({
+	let response = await retryWithBackoff(() =>
+		mistral.chat.complete({
 			model: model,
 			messages: messages,
 			tools: tools,
 			toolChoice: "any"
-		}
+		})
 	);
+	
 	messages.push(response.choices[0].message);
 	const toolCalls = response.choices[0].message.toolCalls;
+	
 	for (const toolCall of toolCalls) {
 		const functionName = toolCall.function.name;
 		const functionParams = JSON.parse(toolCall.function.arguments);
@@ -342,16 +364,16 @@ export async function runAgent(opts){
 			tool_call_id: toolCall.id,
 		});
 	}
-	// console.log(messages);
 	
-	response = await mistral.chat.complete({
+	response = await retryWithBackoff(() =>
+		mistral.chat.complete({
 			model: model,
 			messages: messages,
 			response_format: { type: 'json_object' },
-		}
+		})
 	);
 	
 	const result = response.choices[0].message.content;
 	console.log(extractAndParseJson(result));
-	return extractAndParseJson(result)
+	return extractAndParseJson(result);
 }

@@ -14,6 +14,7 @@
   "dependencies": {
     "@mistralai/mistralai": "^1.1.0",
     "@orra/sdk": "file:../../../sdks/js",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "timers": "^0.1.1"
   }
 }
