@@ -118,7 +118,7 @@ export default function ChatUI() {
 					</button>
 				</div>
 			</footer>
-			<div className="bg-gray-200 p-2 text-center">
+			<div className="bg-gray-200 p-2 text-center text-green-500">
 				Connection status: {isConnected ? 'Connected' : 'Disconnected'}
 			</div>
 		</div>
