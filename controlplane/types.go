@@ -111,9 +111,10 @@ type ParallelGroup []string
 
 // SubTask represents a single task in the ServiceCallingPlan
 type SubTask struct {
-	ID      string            `json:"id"`
-	Service string            `json:"service"`
-	Input   map[string]Source `json:"input"`
-	Status  Status            `json:"status,omitempty"`
-	Error   string            `json:"error,omitempty"`
+	ID             string            `json:"id"`
+	Service        string            `json:"service"`
+	ServiceDetails string            `json:"service_details"`
+	Input          map[string]Source `json:"input"`
+	Status         Status            `json:"status,omitempty"`
+	Error          string            `json:"error,omitempty"`
 }

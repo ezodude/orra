@@ -168,6 +168,23 @@ func (p *ControlPlane) validateInput(services []*ServiceInfo, subTasks []*SubTas
 	return nil
 }
 
+func (p *ControlPlane) addServiceDetails(services []*ServiceInfo, subTasks []*SubTask) error {
+	serviceMap := make(map[string]*ServiceInfo)
+	for _, service := range services {
+		serviceMap[service.ID] = service
+	}
+
+	for _, subTask := range subTasks {
+		service, ok := serviceMap[subTask.Service]
+		if !ok {
+			return fmt.Errorf("service %s not found for subtask %s", subTask.Service, subTask.ID)
+		}
+		subTask.ServiceDetails = service.String()
+	}
+
+	return nil
+}
+
 func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 	services, err := p.discoverProjectServices(orchestration.ProjectID)
 	if err != nil {
@@ -199,6 +216,7 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 		return
 	}
 
+	p.addServiceDetails(services, callingPlan.Tasks)
 	orchestration.Plan = callingPlan
 }
 
@@ -510,6 +528,10 @@ func (a ActionParams) String() (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func (si *ServiceInfo) String() string {
+	return fmt.Sprintf("[%s] %s - %s", si.Type.String(), si.Name, si.Description)
 }
 
 func sanitizeJSONOutput(input string) string {
