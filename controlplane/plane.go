@@ -119,7 +119,7 @@ func (p *ControlPlane) decomposeAction(orchestration *Orchestration, services []
 
 	client := openai.NewClient(p.openAIKey)
 	resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: openai.GPT4o20240806,
+		Model: openai.GPT4oLatest,
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleUser,
@@ -209,14 +209,18 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 		return
 	}
 
-	err = p.validateInput(services, callingPlan.Tasks)
-	if err != nil {
+	if err = p.validateInput(services, callingPlan.Tasks); err != nil {
 		orchestration.Status = Failed
 		orchestration.Error = fmt.Sprintf("Error validating plan input/output: %s", err.Error())
 		return
 	}
 
-	p.addServiceDetails(services, callingPlan.Tasks)
+	if err := p.addServiceDetails(services, callingPlan.Tasks); err != nil {
+		orchestration.Status = Failed
+		orchestration.Error = fmt.Sprintf("Error adding service details to calling plan: %s", err.Error())
+		return
+	}
+
 	orchestration.Plan = callingPlan
 }
 
