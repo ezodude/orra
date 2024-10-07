@@ -118,3 +118,6 @@ type SubTask struct {
 	Status         Status            `json:"status,omitempty"`
 	Error          string            `json:"error,omitempty"`
 }
+
+// NOTES:
+// SubTask Dependencies + Input Source (new struct): update after receiving initial ServiceCallingPlan from LLM.
