@@ -8,6 +8,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type MessageBroker interface {
+	Publish(topic string, message interface{}) error
+	Subscribe(topic string, handler func(message interface{})) error
+	Unsubscribe(topic string) error
+}
+
 type ControlPlane struct {
 	projects           map[string]*Project
 	services           map[string][]*ServiceInfo
@@ -15,6 +21,7 @@ type ControlPlane struct {
 	wsConnections      map[string]*ServiceConnection
 	wsConnectionsMutex sync.RWMutex
 	openAIKey          string
+	broker             MessageBroker
 }
 
 type Project struct {
@@ -47,9 +54,6 @@ type Task struct {
 	ProjectID       string          `json:"-"`
 	Status          Status          `json:"-"`
 }
-
-// Source is either user input or the subtask Id of where the value is expected from
-type Source string
 
 type Spec struct {
 	Type       string     `json:"type"`
@@ -117,6 +121,13 @@ type SubTask struct {
 	Input          map[string]Source `json:"input"`
 	Status         Status            `json:"status,omitempty"`
 	Error          string            `json:"error,omitempty"`
+	Dependencies   []string          `json:"dependencies"`
+}
+
+// Source is either user input or the subtask Id of where the value is expected from
+type Source struct {
+	Type  SourceType `json:"type"`  // "direct", "task_output", or "transform"
+	Value string     `json:"value"` // For "direct": the value itself, for "task_output": "$taskID.outputField", for "transform": transformation expression
 }
 
 // NOTES:

@@ -23,6 +23,7 @@ func NewControlPlane(openAIKey string) *ControlPlane {
 		services:           make(map[string][]*ServiceInfo),
 		orchestrationStore: make(map[string]*Orchestration),
 		openAIKey:          openAIKey,
+		broker:             NewInMemoryBroker(),
 	}
 }
 
@@ -204,7 +205,7 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 	if p.cannotExecuteAction(callingPlan.Tasks) {
 		orchestration.Plan = callingPlan
 		orchestration.Status = NotActionable
-		orchestration.Error = string(callingPlan.Tasks[0].Input["error"])
+		orchestration.Error = callingPlan.Tasks[0].Input["error"].Value
 		return
 	}
 
@@ -420,9 +421,9 @@ func (o *Orchestrator) prepareInput(input map[string]Source) (map[string]json.Ra
 	defer o.resultsMu.RUnlock()
 
 	prepared := make(map[string]json.RawMessage)
-	for key, value := range input {
-		if strings.HasPrefix(string(value), "$") {
-			parts := strings.Split(strings.TrimPrefix(string(value), "$"), ".")
+	for key, source := range input {
+		if strings.HasPrefix(source.Value, "$") {
+			parts := strings.Split(strings.TrimPrefix(source.Value, "$"), ".")
 			taskID, sourceID := parts[0], parts[1]
 
 			rawSource, ok := o.results[taskID]
@@ -443,7 +444,7 @@ func (o *Orchestrator) prepareInput(input map[string]Source) (map[string]json.Ra
 
 			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, sourceValue))
 		} else {
-			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, value))
+			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, source.Value))
 		}
 	}
 

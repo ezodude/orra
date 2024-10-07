@@ -102,3 +102,34 @@ const (
 	Disconnected ServiceStatus = iota + 1
 	Connected
 )
+
+type SourceType int
+
+const (
+	Direct SourceType = iota
+	TaskOutput
+)
+
+func (st *SourceType) String() string {
+	return [...]string{"direct", "task_output"}[*st]
+}
+
+func (st *SourceType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(st.String())
+}
+
+func (st *SourceType) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "direct":
+		*st = Direct
+	case "task_output":
+		*st = TaskOutput
+	default:
+		return fmt.Errorf("invalid SourceType: %s", s)
+	}
+	return nil
+}
