@@ -84,21 +84,20 @@ Please generate a plan in the following JSON format:
       "id": "task1",
       "service": "ServiceID",
       "input": {
-        "param1": "value1",
-        "param2": "$taskId"
+        "param1": "value1"
       }
     },
     {
       "id": "task2",
       "service": "AnotherServiceID",
       "input": {
-        "param1": "$task1"
+        "param1": "$task1.param1"
       }
     }
   ],
   "parallel_groups": [
-    ["task1", "task3"],
-    ["task2", "task4"]
+    ["task1"],
+    ["task2"]
   ]
 }
 
