@@ -65,7 +65,7 @@ Guidelines:
 1. Each service described above contains input/output types and description. You must strictly adhere to these types and descriptions when using the services.
 2. Each task in the plan should strictly use one of the available services. Follow the JSON conventions for each task.
 3. Each task MUST have a unique ID, which is strictly increasing.
-4. Inputs for tasks can either be constants or outputs from preceding tasks. In the latter case, use the format $taskId to denote the ID of the previous task whose output will be the input.
+4. With the excpetion of Task 0, whose inputs are constants derived from the User Action, inputs for other tasks have to be outputs from preceding tasks. In the latter case, use the format $taskId to denote the ID of the previous task whose output will be the input.
 5. Ensure the plan maximizes parallelizability.
 6. Only use the provided services.
 	- If a query cannot be addressed using these, USE A "final" TASK TO SUGGEST THE NEXT STEPS.
@@ -81,10 +81,16 @@ Please generate a plan in the following JSON format:
 {
   "tasks": [
     {
+      "id": "task0",
+      "input": {
+        "param1": "value1"
+      }
+    },
+    {
       "id": "task1",
       "service": "ServiceID",
       "input": {
-        "param1": "value1"
+        "param1": "$task0.param1"
       }
     },
     {
