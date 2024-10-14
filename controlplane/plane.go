@@ -235,6 +235,13 @@ func (p *ControlPlane) CreateAndStartWorkers(orchestrationID string, plan *Servi
 	}
 
 	if len(resultDependencies) == 0 {
+		p.Logger.Error().
+			Fields(map[string]any{
+				"Dependencies":    resultDependencies,
+				"OrchestrationID": orchestrationID,
+			}).
+			Msg("Result Aggregator has no dependencies")
+
 		return
 	}
 
@@ -396,17 +403,6 @@ func (p *ControlPlane) executeOrchestration(orchestration *Orchestration) {
 			Err(fmt.Errorf("error appending initial entry: %w", err))
 		return
 	}
-}
-
-// extractDependencyID extracts the task ID from a dependency reference
-// Example: "$task0.param1" returns "task0"
-func extractDependencyID(input string) string {
-	matches := dependencyPattern.FindStringSubmatch(input)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-
-	return ""
 }
 
 func (p *ControlPlane) FinalizeOrchestration(
@@ -587,4 +583,15 @@ func (s *SubTask) extractDependencies() DependencyKeys {
 		}
 	}
 	return out
+}
+
+// extractDependencyID extracts the task ID from a dependency reference
+// Example: "$task0.param1" returns "task0"
+func extractDependencyID(input string) string {
+	matches := dependencyPattern.FindStringSubmatch(input)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+
+	return ""
 }
