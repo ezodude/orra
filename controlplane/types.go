@@ -34,6 +34,7 @@ type Project struct {
 type ServiceConnection struct {
 	Status ServiceStatus
 	Conn   *websocket.Conn
+	mu     sync.Mutex
 }
 
 type OrchestrationState struct {
@@ -95,6 +96,12 @@ type ResultAggregator struct {
 	stateMu      sync.Mutex
 }
 
+type FailureTracker struct {
+	LogManager *LogManager
+	logState   *LogState
+	stateMu    sync.Mutex
+}
+
 type TaskWorker struct {
 	ServiceID    string
 	TaskID       string
@@ -149,7 +156,7 @@ type Orchestration struct {
 	Plan      *ServiceCallingPlan `json:"plan"`
 	Results   []json.RawMessage   `json:"results"`
 	Status    Status              `json:"status"`
-	Error     string              `json:"error,omitempty"`
+	Error     json.RawMessage     `json:"error,omitempty"`
 	Timestamp time.Time           `json:"timestamp"`
 	taskZero  json.RawMessage
 }

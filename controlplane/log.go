@@ -115,7 +115,37 @@ func (lm *LogManager) MarkTaskCompleted(orchestrationID, taskID string) (Status,
 		return state.Status, fmt.Errorf("orchestration %s has no associated state", orchestrationID)
 	}
 	state.CompletedTasks[taskID] = true
+	state.UpdatedAt = time.Now()
+
+	return state.Status, nil
+}
+
+func (lm *LogManager) MarkOrchestrationCompleted(orchestrationID string) (Status, error) {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
+	state, ok := lm.orchestrations[orchestrationID]
+	if !ok {
+		return state.Status, fmt.Errorf("orchestration %s has no associated state", orchestrationID)
+	}
+
 	state.Status = Completed
+	state.UpdatedAt = time.Now()
+
+	return state.Status, nil
+}
+
+func (lm *LogManager) MarkOrchestrationFailed(orchestrationID string, reason json.RawMessage) (Status, error) {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
+	state, ok := lm.orchestrations[orchestrationID]
+	if !ok {
+		return state.Status, fmt.Errorf("orchestration %s has no associated state", orchestrationID)
+	}
+
+	state.Error = string(reason)
+	state.Status = Failed
 	state.UpdatedAt = time.Now()
 
 	return state.Status, nil
@@ -127,59 +157,29 @@ func (lm *LogManager) GetOrchestrationProjectID(orchestrationID string) string {
 	return lm.orchestrations[orchestrationID].ProjectID
 }
 
-//func (lm *LogManager) checkOrchestrationCompletion(orchestrationID string) error {
-//	lm.mu.Lock()
-//	defer lm.mu.Unlock()
-//
-//	lm.Logger.Debug().Str("orchestrationID", orchestrationID).Msgf("starting checkOrchestrationCompletion")
-//
-//	state, exists := lm.orchestrations[orchestrationID]
-//	if !exists {
-//		return fmt.Errorf("orchestration %s not found for completion check", orchestrationID)
-//	}
-//
-//	if terminated := state.Status == Completed || state.Status == Failed; terminated {
-//		return nil
-//	}
-//
-//	//for _, progress := range state.TaskProgress {
-//	//	if !progress.Completed {
-//	//		return nil
-//	//	}
-//	//}
-//
-//	lm.Logger.Debug().Str("orchestrationID", orchestrationID).Msgf("about to completeOrchestration with status Completed")
-//
-//	return lm.completeOrchestration(orchestrationID, Completed)
-//}
-
-func (lm *LogManager) FailOrchestration(orchestrationID string, reason string) {
-	state, exists := lm.orchestrations[orchestrationID]
-	if !exists {
-		lm.Logger.Error().Str("orchestrationID", orchestrationID).Msg("Orchestration not found for failure handling")
-		return
+func (lm *LogManager) AppendFailureToLog(orchestrationID, id, producerID, reason string) error {
+	reasonData, err := json.Marshal(reason)
+	if err != nil {
+		return fmt.Errorf("failed to marshal reason for log entry: %w", err)
+	}
+	// Create a new log entry for our task's output
+	newEntry := LogEntry{
+		Type:       "task_failure",
+		ID:         id,
+		Value:      reasonData,
+		ProducerID: producerID,
+		Timestamp:  time.Now(),
 	}
 
-	lm.Logger.Debug().Fields(struct {
-		OrchestrationID string
-		Reason          string
-	}{
-		OrchestrationID: orchestrationID,
-		Reason:          reason,
-	}).Msg("About to failOrchestration")
-
-	state.Error = reason
-	state.UpdatedAt = time.Now()
-
-	if err := lm.FinalizeOrchestration(orchestrationID, Failed, reason, nil); err != nil {
-		lm.Logger.Error().
-			Str("OrchestrationID", orchestrationID).
-			Msg("Orchestration could not complete for failed state")
-		return
+	// Append our output to the log
+	if err := lm.GetLog(orchestrationID).Append(newEntry); err != nil {
+		return fmt.Errorf("failed to append task output to log: %w", err)
 	}
+
+	return nil
 }
 
-func (lm *LogManager) FinalizeOrchestration(orchestrationID string, status Status, reason string, result json.RawMessage) error {
+func (lm *LogManager) FinalizeOrchestration(orchestrationID string, status Status, reason, result json.RawMessage) error {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
