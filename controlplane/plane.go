@@ -6,24 +6,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
 )
 
 func NewControlPlane(openAIKey string) *ControlPlane {
-	return &ControlPlane{
+	plane := &ControlPlane{
 		wsConnections:      make(map[string]*ServiceConnection),
 		projects:           make(map[string]*Project),
 		services:           make(map[string][]*ServiceInfo),
 		orchestrationStore: make(map[string]*Orchestration),
+		logWorkers:         make(map[string]map[string]context.CancelFunc),
 		openAIKey:          openAIKey,
 	}
+	return plane
 }
 
 func (p *ControlPlane) discoverProjectServices(projectID string) ([]*ServiceInfo, error) {
@@ -65,26 +64,33 @@ Guidelines:
 1. Each service described above contains input/output types and description. You must strictly adhere to these types and descriptions when using the services.
 2. Each task in the plan should strictly use one of the available services. Follow the JSON conventions for each task.
 3. Each task MUST have a unique ID, which is strictly increasing.
-4. Inputs for tasks can either be constants or outputs from preceding tasks. In the latter case, use the format $taskId to denote the ID of the previous task whose output will be the input.
-5. Ensure the plan maximizes parallelizability.
-6. Only use the provided services.
+4. With the excpetion of Task 0, whose inputs are constants derived from the User Action, inputs for other tasks have to be outputs from preceding tasks. In the latter case, use the format $taskId to denote the ID of the previous task whose output will be the input.
+5. There can only be a single Task 0, other tasks HAVE TO CORRESPOND TO AVAILABLE SERVICES.
+6. Ensure the plan maximizes parallelizability.
+7. Only use the provided services.
 	- If a query cannot be addressed using these, USE A "final" TASK TO SUGGEST THE NEXT STEPS.
 		- The final task MUST have "final" as the task ID.
 		- The final task DOES NOT require a service.
 		- The final task input PARAM key should be "error" and the value should explain why the query cannot be addressed.   
 		- NO OTHER TASKS ARE REQUIRED. 
-7. Never explain the plan with comments.
-8. Never introduce new services other than the ones provided.
+8. Never explain the plan with comments.
+9. Never introduce new services other than the ones provided.
 
 Please generate a plan in the following JSON format:
 
 {
   "tasks": [
     {
+      "id": "task0",
+      "input": {
+        "param1": "value1"
+      }
+    },
+    {
       "id": "task1",
       "service": "ServiceID",
       "input": {
-        "param1": "value1"
+        "param1": "$task0.param1"
       }
     },
     {
@@ -103,7 +109,11 @@ Please generate a plan in the following JSON format:
 
 Ensure that the plan is efficient, maximizes parallelization, and accurately fulfills the user's action using the available services. If the action cannot be completed with the given services, explain why in a "final" task and suggest alternatives if possible.
 
-Generate the execution plan:`, strings.Join(serviceDescriptions, "\n\n"), actionStr, string(dataStr))
+Generate the execution plan:`,
+		strings.Join(serviceDescriptions, "\n\n"),
+		actionStr,
+		string(dataStr),
+	)
 
 	return prompt, nil
 }
@@ -114,7 +124,9 @@ func (p *ControlPlane) decomposeAction(orchestration *Orchestration, services []
 		return nil, fmt.Errorf("error generating LLM prompt for decomposing actions: %v", err)
 	}
 
-	log.Println("decomposeAction prompt:", prompt)
+	p.Logger.Debug().
+		Str("Prompt", prompt).
+		Msg("Decompose action prompt")
 
 	client := openai.NewClient(p.openAIKey)
 	resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
@@ -133,7 +145,9 @@ func (p *ControlPlane) decomposeAction(orchestration *Orchestration, services []
 
 	var result *ServiceCallingPlan
 	sanitisedJSON := sanitizeJSONOutput(resp.Choices[0].Message.Content)
-	log.Println("resp.Choices[0].Message.Content", sanitisedJSON)
+	p.Logger.Debug().
+		Str("Sanitized JSON", sanitisedJSON).
+		Msg("Service calling plan")
 
 	err = json.Unmarshal([]byte(sanitisedJSON), &result)
 	if err != nil {
@@ -184,10 +198,102 @@ func (p *ControlPlane) addServiceDetails(services []*ServiceInfo, subTasks []*Su
 	return nil
 }
 
+func (p *ControlPlane) CreateAndStartWorkers(orchestrationID string, plan *ServiceCallingPlan) {
+	p.workerMu.Lock()
+	defer p.workerMu.Unlock()
+
+	p.logWorkers[orchestrationID] = make(map[string]context.CancelFunc)
+
+	resultDependencies := make(DependencyKeys)
+
+	for _, task := range plan.Tasks {
+		deps := task.extractDependencies()
+		resultDependencies[task.ID] = struct{}{}
+
+		p.Logger.Debug().
+			Fields(map[string]any{
+				"TaskID":          task.ID,
+				"Dependencies":    deps,
+				"OrchestrationID": orchestrationID,
+			}).
+			Msg("Task extracted dependencies")
+
+		worker := NewTaskWorker(task.Service, task.ID, deps, p.LogManager)
+		ctx, cancel := context.WithCancel(context.Background())
+		p.logWorkers[orchestrationID][task.ID] = cancel
+		p.Logger.Debug().
+			Fields(struct {
+				TaskID          string
+				OrchestrationID string
+			}{
+				TaskID:          task.ID,
+				OrchestrationID: orchestrationID,
+			}).
+			Msg("Starting worker for task")
+
+		go worker.Start(ctx, orchestrationID)
+	}
+
+	if len(resultDependencies) == 0 {
+		return
+	}
+
+	p.Logger.Debug().
+		Fields(map[string]any{
+			"Dependencies":    resultDependencies,
+			"OrchestrationID": orchestrationID,
+		}).
+		Msg("Result Aggregator extracted dependencies")
+
+	aggregator := NewResultAggregator(resultDependencies, p.LogManager)
+	ctx, cancel := context.WithCancel(context.Background())
+	p.logWorkers[orchestrationID][ResultAggregatorID] = cancel
+
+	p.Logger.Debug().Str("orchestrationID", orchestrationID).Msg("Starting result aggregator for orchestration")
+	go aggregator.Start(ctx, orchestrationID)
+}
+
+func (p *ControlPlane) CleanupLogWorkers(orchestrationID string) {
+	p.workerMu.Lock()
+	defer p.workerMu.Unlock()
+
+	if cancelFuncs, exists := p.logWorkers[orchestrationID]; exists {
+		for logWorker, cancel := range cancelFuncs {
+			p.Logger.Debug().
+				Str("LogWorker", logWorker).
+				Msgf("Stopping Log worker for orchestration: %s", orchestrationID)
+
+			cancel() // This will trigger ctx.Done() in the worker
+		}
+		delete(p.logWorkers, orchestrationID)
+		p.Logger.Debug().
+			Str("OrchestrationID", orchestrationID).
+			Msg("Cleaned up task workers for orchestration.")
+	}
+}
+
+func (p *ControlPlane) GetServiceConnection(serviceID string) *ServiceConnection {
+	p.wsConnectionsMutex.RLock()
+	defer p.wsConnectionsMutex.RUnlock()
+
+	conn, exists := p.wsConnections[serviceID]
+	if !exists {
+		return nil
+	}
+	return conn
+}
+
 func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
+	p.orchestrationStoreMu.Lock()
+	defer p.orchestrationStoreMu.Unlock()
+
+	p.orchestrationStore[orchestration.ID] = orchestration
 	services, err := p.discoverProjectServices(orchestration.ProjectID)
 	if err != nil {
-		log.Printf("Error discovering services: %v", err)
+		p.Logger.Error().
+			Str("OrchestrationID", orchestration.ID).
+			Err(fmt.Errorf("error discovering services: %w", err))
+
 		orchestration.Status = Failed
 		orchestration.Error = err.Error()
 		return
@@ -195,7 +301,10 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 
 	callingPlan, err := p.decomposeAction(orchestration, services)
 	if err != nil {
-		log.Printf("Error decomposing action: %v", err)
+		p.Logger.Error().
+			Str("OrchestrationID", orchestration.ID).
+			Err(fmt.Errorf("error decomposing action: %w", err))
+
 		orchestration.Status = Failed
 		orchestration.Error = fmt.Sprintf("Error decomposing action: %s", err.Error())
 		return
@@ -208,19 +317,58 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 		return
 	}
 
-	if err = p.validateInput(services, callingPlan.Tasks); err != nil {
+	taskZero, onlyServicesCallingPlan := p.callingPlanMinusTaskZero(callingPlan)
+	if taskZero == nil {
+		p.Logger.Error().
+			Str("OrchestrationID", orchestration.ID).
+			Err(fmt.Errorf("error locating task zero in calling plan"))
+
+		orchestration.Plan = callingPlan
+		orchestration.Status = Failed
+		orchestration.Error = fmt.Sprintf("Error locating task zero in calling plan")
+		return
+	}
+
+	taskZeroInput, err := json.Marshal(taskZero.Input)
+	if err != nil {
+		orchestration.Status = Failed
+		orchestration.Error = fmt.Sprintf("Failed to convert task zero into valid params: %v", err)
+		return
+	}
+
+	if err = p.validateInput(services, onlyServicesCallingPlan.Tasks); err != nil {
 		orchestration.Status = Failed
 		orchestration.Error = fmt.Sprintf("Error validating plan input/output: %s", err.Error())
 		return
 	}
 
-	if err := p.addServiceDetails(services, callingPlan.Tasks); err != nil {
+	if err := p.addServiceDetails(services, onlyServicesCallingPlan.Tasks); err != nil {
 		orchestration.Status = Failed
 		orchestration.Error = fmt.Sprintf("Error adding service details to calling plan: %s", err.Error())
 		return
 	}
 
-	orchestration.Plan = callingPlan
+	orchestration.Plan = onlyServicesCallingPlan
+	orchestration.taskZero = taskZeroInput
+}
+
+func (p *ControlPlane) callingPlanMinusTaskZero(callingPlan *ServiceCallingPlan) (*SubTask, *ServiceCallingPlan) {
+	var taskZero *SubTask
+	var serviceTasks []*SubTask
+
+	for _, subTask := range callingPlan.Tasks {
+		if strings.EqualFold(subTask.ID, TaskZero) {
+			taskZero = subTask
+			continue
+		}
+		serviceTasks = append(serviceTasks, subTask)
+	}
+
+	return taskZero, &ServiceCallingPlan{
+		ProjectID:      callingPlan.ProjectID,
+		Tasks:          serviceTasks,
+		ParallelGroups: callingPlan.ParallelGroups,
+	}
 }
 
 func (p *ControlPlane) cannotExecuteAction(subTasks []*SubTask) bool {
@@ -228,76 +376,115 @@ func (p *ControlPlane) cannotExecuteAction(subTasks []*SubTask) bool {
 }
 
 func (p *ControlPlane) executeOrchestration(orchestration *Orchestration) {
-	p.executePlan(orchestration)
-	err := p.triggerWebhook(orchestration)
-	if err != nil {
-		log.Printf("Error triggering webhook: %v", err)
+	p.Logger.Debug().Msgf("About to create Log for orchestration %s", orchestration.ID)
+	log := p.LogManager.CreateLog(orchestration.ID, orchestration.Plan)
+
+	p.Logger.Debug().Msgf("About to create and start workers for orchestration %s", orchestration.ID)
+	p.CreateAndStartWorkers(orchestration.ID, orchestration.Plan)
+
+	initialEntry := LogEntry{
+		Type:       "task_output",
+		ID:         TaskZero,
+		Value:      orchestration.taskZero,
+		ProducerID: "control-panel",
+	}
+
+	p.Logger.Debug().Msgf("About to append initial entry to Log for orchestration %s", orchestration.ID)
+	if err := log.Append(initialEntry); err != nil {
+		p.Logger.Error().
+			Str("OrchestrationID", orchestration.ID).
+			Err(fmt.Errorf("error appending initial entry: %w", err))
 		return
 	}
 }
 
-func (p *ControlPlane) executePlan(orchestration *Orchestration) {
-	tm := NewOrchestrator()
-
-	p.wsConnectionsMutex.RLock()
-	tm.wsConns = p.wsConnections
-	p.wsConnectionsMutex.RUnlock()
-
-	for _, group := range orchestration.Plan.ParallelGroups {
-		if err := tm.executeParallelGroup(group, orchestration); err != nil {
-			orchestration.Status = Failed
-			orchestration.Error = err.Error()
-			log.Printf("Plan execution failed at group: %+v", group)
-			return
-		}
+// extractDependencyID extracts the task ID from a dependency reference
+// Example: "$task0.param1" returns "task0"
+func extractDependencyID(input string) string {
+	matches := dependencyPattern.FindStringSubmatch(input)
+	if len(matches) > 1 {
+		return matches[1]
 	}
 
-	orchestration.Status = Completed
-	if len(orchestration.Plan.Tasks) > 0 {
-		lastTaskID := orchestration.Plan.Tasks[len(orchestration.Plan.Tasks)-1].ID
-		if result, ok := tm.results[lastTaskID]; ok {
-			orchestration.Results = []json.RawMessage{result}
-		} else {
-			log.Printf("Warning: Result for last task %s not found", lastTaskID)
-		}
-	} else {
-		log.Printf("Warning: No tasks in the plan")
+	return ""
+}
+
+func (p *ControlPlane) FinalizeOrchestration(
+	orchestrationID string,
+	status Status,
+	reason string,
+	results []json.RawMessage) error {
+	p.orchestrationStoreMu.Lock()
+	defer p.orchestrationStoreMu.Unlock()
+
+	orchestration, exists := p.orchestrationStore[orchestrationID]
+	if !exists {
+		return fmt.Errorf("control panel cannot finalize missing orchestration %s", orchestrationID)
 	}
-	log.Printf("Plan execution completed successfully for orchestration %s", orchestration.ID)
+
+	orchestration.Status = status
+	orchestration.Error = reason
+	orchestration.Results = results
+
+	p.Logger.Debug().
+		Str("OrchestrationID", orchestration.ID).
+		Msgf("About to FinalizeOrchestration with status: %s", orchestration.Status.String())
+
+	p.CleanupLogWorkers(orchestration.ID)
+
+	if err := p.triggerWebhook(orchestration); err != nil {
+		return fmt.Errorf("failed to trigger webhook for orchestration %s: %w", orchestration.ID, err)
+	}
+
+	return nil
 }
 
 func (p *ControlPlane) triggerWebhook(orchestration *Orchestration) error {
 	project, ok := p.projects[orchestration.ProjectID]
 	if !ok {
-		log.Printf("Project %s not found", orchestration.ProjectID)
+		return fmt.Errorf("project %s not found", orchestration.ProjectID)
 	}
 
-	var resultInfo = struct {
-		Results []json.RawMessage `json:"results"`
-		Status  Status            `json:"status"`
-		Error   string            `json:"error,omitempty"`
+	var payload = struct {
+		OrchestrationID string            `json:"orchestrationId"`
+		Results         []json.RawMessage `json:"results"`
+		Status          Status            `json:"status"`
+		Error           string            `json:"error,omitempty"`
 	}{
-		Results: orchestration.Results,
-		Status:  orchestration.Status,
-		Error:   orchestration.Error,
+		OrchestrationID: orchestration.ID,
+		Results:         orchestration.Results,
+		Status:          orchestration.Status,
+		Error:           orchestration.Error,
 	}
 
-	payload, err := json.Marshal(resultInfo)
+	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to trigger webhook failed to marshal payload: %w", err)
 	}
 
-	log.Printf("Triggering webhook %s for project %s to send results:\n %s\n", project.Webhook, project.ID, payload)
+	p.Logger.Debug().
+		Fields(struct {
+			OrchestrationID string
+			ProjectID       string
+			Webhook         string
+			Payload         string
+		}{
+			OrchestrationID: orchestration.ID,
+			ProjectID:       project.ID,
+			Webhook:         project.Webhook,
+			Payload:         string(jsonPayload),
+		}).
+		Msg("Triggering webhook")
 
 	// Create a new request
-	req, err := http.NewRequest("POST", project.Webhook, bytes.NewBuffer(payload))
+	req, err := http.NewRequest("POST", project.Webhook, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "YourAppName/1.0")
+	req.Header.Set("User-Agent", "Orra/1.0")
 
 	// Create an HTTP client with a timeout
 	client := &http.Client{
@@ -312,7 +499,9 @@ func (p *ControlPlane) triggerWebhook(orchestration *Orchestration) error {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			log.Printf("Failed to close response body: %v", err)
+			p.Logger.Error().
+				Str("OrchestrationID", orchestration.ID).
+				Err(fmt.Errorf("failed to close response body when triggering Webhook: %w", err))
 		}
 	}(resp.Body)
 
@@ -335,177 +524,6 @@ func (p *ControlPlane) GetProjectByApiKey(key string) (*Project, error) {
 	} else {
 		return nil, fmt.Errorf("no project found with the given API key: %s", key)
 	}
-}
-
-func NewOrchestrator() *Orchestrator {
-	return &Orchestrator{
-		tasks:   make(map[string]*Task),
-		results: make(map[string]json.RawMessage),
-		wsConns: make(map[string]*ServiceConnection),
-	}
-}
-
-func (o *Orchestrator) executeParallelGroup(group ParallelGroup, orchestration *Orchestration) error {
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(group))
-
-	for _, subTaskId := range group {
-		wg.Add(1)
-		go func(id string) {
-			defer wg.Done()
-			subTask := o.findSubTaskByID(id, orchestration.Plan.Tasks)
-			if subTask == nil {
-				errChan <- fmt.Errorf("task %s not found", id)
-				return
-			}
-			log.Printf("Found subTask %s with input %+v\n", subTask.ID, subTask.Input)
-			if err := o.executeSubTask(subTask, orchestration.ID, orchestration.ProjectID); err != nil {
-				subTask.Error = err.Error()
-				subTask.Status = Failed
-				errChan <- err
-			} else {
-				subTask.Status = Completed
-			}
-		}(subTaskId)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	var errors []error
-	for err := range errChan {
-		errors = append(errors, err)
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("group execution errors: %v", errors)
-	}
-	return nil
-}
-
-func (o *Orchestrator) findSubTaskByID(id string, tasks []*SubTask) *SubTask {
-	for _, task := range tasks {
-		if strings.EqualFold(task.ID, id) {
-			return task
-		}
-	}
-	return nil
-}
-
-func (o *Orchestrator) executeSubTask(subTask *SubTask, orchestrationID, projectID string) error {
-	input, err := o.prepareInput(subTask.Input)
-	if err != nil {
-		return fmt.Errorf("failed to prepare input for task %s: %w", subTask.ID, err)
-	}
-
-	data, err := json.Marshal(input)
-	if err != nil {
-		return fmt.Errorf("failed to marshal input for task %s: %w", subTask.ID, err)
-	}
-
-	task := &Task{
-		ID:              subTask.ID,
-		ServiceID:       subTask.Service,
-		OrchestrationID: orchestrationID,
-		ProjectID:       projectID,
-		Input:           data,
-		Status:          Pending,
-	}
-
-	return o.executeTask(task)
-}
-
-func (o *Orchestrator) prepareInput(input map[string]Source) (map[string]json.RawMessage, error) {
-	o.resultsMu.RLock()
-	defer o.resultsMu.RUnlock()
-
-	prepared := make(map[string]json.RawMessage)
-	for key, value := range input {
-		if strings.HasPrefix(string(value), "$") {
-			parts := strings.Split(strings.TrimPrefix(string(value), "$"), ".")
-			taskID, sourceID := parts[0], parts[1]
-
-			rawSource, ok := o.results[taskID]
-			if !ok {
-				return nil, fmt.Errorf("result for task %s not found", taskID)
-			}
-
-			var sourceData map[string]any
-			err := json.Unmarshal(rawSource, &sourceData)
-			if err != nil {
-				return nil, err
-			}
-
-			sourceValue, ok := sourceData[sourceID]
-			if !ok {
-				return nil, fmt.Errorf("result for %s.%s not found", taskID, sourceID)
-			}
-
-			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, sourceValue))
-		} else {
-			prepared[key] = json.RawMessage(fmt.Sprintf(`"%s"`, value))
-		}
-	}
-
-	return prepared, nil
-}
-
-func (o *Orchestrator) executeTask(task *Task) error {
-	svcConn := o.getServiceConnection(task.ServiceID)
-	if svcConn == nil {
-		return fmt.Errorf("ServiceID %s has no connection", task.ServiceID)
-	}
-
-	task.Status = Processing
-	resultChan := make(chan json.RawMessage, 1)
-	errChan := make(chan error, 1)
-
-	go o.handleTaskExecution(svcConn, task, resultChan, errChan)
-
-	select {
-	case result := <-resultChan:
-		if len(result) < 1 {
-			return fmt.Errorf("task %s execution failed with empty result [%s]", task.ID, string(result))
-		}
-		o.setResult(task.ID, result)
-		return nil
-	case err := <-errChan:
-		return err
-	case <-time.After(30 * time.Second):
-		return fmt.Errorf("task execution timed out")
-	}
-}
-
-func (o *Orchestrator) getServiceConnection(serviceID string) *ServiceConnection {
-	o.wsConnsMu.RLock()
-	defer o.wsConnsMu.RUnlock()
-	return o.wsConns[serviceID]
-}
-
-func (o *Orchestrator) handleTaskExecution(svcConn *ServiceConnection, task *Task, resultChan chan<- json.RawMessage, errChan chan<- error) {
-	if err := svcConn.Conn.WriteJSON(task); err != nil {
-		errChan <- fmt.Errorf("failed to send task: %w", err)
-		return
-	}
-
-	var result struct {
-		TaskID string          `json:"taskId"`
-		Result json.RawMessage `json:"result"`
-	}
-
-	if err := svcConn.Conn.ReadJSON(&result); err != nil {
-		errChan <- fmt.Errorf("failed to read result: %w", err)
-		return
-	}
-
-	resultChan <- result.Result
-}
-
-func (o *Orchestrator) setResult(taskID string, result json.RawMessage) {
-	o.resultsMu.Lock()
-	o.results[taskID] = result
-	o.resultsMu.Unlock()
-	atomic.AddInt32(&o.resultCount, 1)
 }
 
 func (s ServiceSchema) InputIncludes(src string) bool {
@@ -555,4 +573,18 @@ func sanitizeJSONOutput(input string) string {
 
 	// If the input doesn't have the expected markers, return it as is
 	return input
+}
+
+func (o *Orchestration) Executable() bool {
+	return o.Status != NotActionable && o.Status != Failed
+}
+
+func (s *SubTask) extractDependencies() DependencyKeys {
+	out := make(DependencyKeys)
+	for _, source := range s.Input {
+		if dep := extractDependencyID(string(source)); dep != "" {
+			out[dep] = struct{}{}
+		}
+	}
+	return out
 }

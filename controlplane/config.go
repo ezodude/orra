@@ -3,10 +3,20 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/vrischmann/envconfig"
 )
+
+const (
+	TaskZero           = "task0"
+	ResultAggregatorID = "result_aggregator"
+)
+
+var LogsRetentionPeriod = time.Hour * 24
+var dependencyPattern = regexp.MustCompile(`^\$([^.]+)\.`)
 
 type Config struct {
 	Port       int `envconfig:"default=8005"`

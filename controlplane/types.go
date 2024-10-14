@@ -1,20 +1,28 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
 )
 
 type ControlPlane struct {
-	projects           map[string]*Project
-	services           map[string][]*ServiceInfo
-	orchestrationStore map[string]*Orchestration
-	wsConnections      map[string]*ServiceConnection
-	wsConnectionsMutex sync.RWMutex
-	openAIKey          string
+	projects             map[string]*Project
+	services             map[string][]*ServiceInfo
+	orchestrationStore   map[string]*Orchestration
+	orchestrationStoreMu sync.RWMutex
+	wsConnections        map[string]*ServiceConnection
+	wsConnectionsMutex   sync.RWMutex
+	LogManager           *LogManager
+	logWorkers           map[string]map[string]context.CancelFunc
+	workerMu             sync.RWMutex
+	openAIKey            string
+	Logger               zerolog.Logger
 }
 
 type Project struct {
@@ -28,15 +36,72 @@ type ServiceConnection struct {
 	Conn   *websocket.Conn
 }
 
-type Orchestrator struct {
-	tasks       map[string]*Task
-	results     map[string]json.RawMessage
-	tasksMu     sync.RWMutex
-	resultsMu   sync.RWMutex
-	wsConns     map[string]*ServiceConnection
-	wsConnsMu   sync.RWMutex
-	taskCount   int32
-	resultCount int32
+type OrchestrationState struct {
+	ID             string
+	ProjectID      string
+	Plan           *ServiceCallingPlan
+	CompletedTasks map[string]bool
+	Status         Status
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Error          string
+}
+
+type LogEntry struct {
+	Offset     uint64          `json:"offset"`
+	Type       string          `json:"type"`
+	ID         string          `json:"id"`
+	Value      json.RawMessage `json:"value"`
+	Timestamp  time.Time       `json:"timestamp"`
+	ProducerID string          `json:"producer_id"`
+	AttemptNum int             `json:"attempt_num"`
+}
+
+type LogManager struct {
+	logs           map[string]*Log
+	orchestrations map[string]*OrchestrationState
+	mu             sync.RWMutex
+	retention      time.Duration
+	cleanupTicker  *time.Ticker
+	webhookClient  *http.Client
+	controlPlane   *ControlPlane
+	Logger         zerolog.Logger
+}
+
+type Log struct {
+	Entries       []LogEntry
+	CurrentOffset uint64
+	mu            sync.RWMutex
+	lastAccessed  time.Time // For cleanup
+}
+
+type DependencyState map[string]json.RawMessage
+
+type LogState struct {
+	LastOffset      uint64
+	Processed       map[string]bool
+	DependencyState DependencyState
+}
+
+type LogWorker interface {
+	Start(ctx context.Context, orchestrationID string)
+	PollLog(ctx context.Context, logStream *Log, entriesChan chan<- LogEntry)
+}
+
+type ResultAggregator struct {
+	Dependencies DependencyKeys
+	LogManager   *LogManager
+	logState     *LogState
+	stateMu      sync.Mutex
+}
+
+type TaskWorker struct {
+	ServiceID    string
+	TaskID       string
+	Dependencies DependencyKeys
+	LogManager   *LogManager
+	logState     *LogState
+	stateMu      sync.Mutex
 }
 
 type Task struct {
@@ -86,6 +151,7 @@ type Orchestration struct {
 	Status    Status              `json:"status"`
 	Error     string              `json:"error,omitempty"`
 	Timestamp time.Time           `json:"timestamp"`
+	taskZero  json.RawMessage
 }
 
 type Action struct {
@@ -108,6 +174,8 @@ type ServiceCallingPlan struct {
 }
 
 type ParallelGroup []string
+
+type DependencyKeys map[string]struct{}
 
 // SubTask represents a single task in the ServiceCallingPlan
 type SubTask struct {
