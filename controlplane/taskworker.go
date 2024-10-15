@@ -4,7 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
 	"time"
+)
+
+const (
+	maxRetries = 5
+	baseDelay  = 1 * time.Second
+	maxDelay   = 30 * time.Second
 )
 
 func NewTaskWorker(serviceID string, taskID string, dependencies DependencyKeys, logManager *LogManager) LogWorker {
@@ -47,7 +55,6 @@ func (w *TaskWorker) Start(ctx context.Context, orchestrationID string) {
 						w.TaskID,
 						orchestrationID,
 					)
-				w.LogManager.FailOrchestration(orchestrationID, fmt.Sprintf("Task %s failed: %v", w.TaskID, err))
 				return
 			}
 		case <-ctx.Done():
@@ -106,13 +113,19 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 	}
 
 	// Execute our task
-	output, err := w.executeTask(ctx, orchestrationID)
+	output, err := w.executeTaskWithRetry(ctx, orchestrationID)
 	if err != nil {
-		return fmt.Errorf("failed to execute task: %w", err)
+		w.LogManager.Logger.Error().Err(err).Msgf("Cannot execute task %s for orchestration %s", w.TaskID, orchestrationID)
+		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.ServiceID, err.Error())
 	}
 
 	// Mark this entry as processed
 	w.logState.Processed[entry.ID] = true
+
+	if _, err := w.LogManager.MarkTaskCompleted(orchestrationID, entry.ID); err != nil {
+		w.LogManager.Logger.Error().Err(err).Msgf("Cannot mark task %s completed for orchestration %s", w.TaskID, orchestrationID)
+		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.ServiceID, err.Error())
+	}
 
 	// Create a new log entry for our task's output
 	newEntry := LogEntry{
@@ -125,11 +138,47 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 
 	// Append our output to the log
 	if err := w.LogManager.GetLog(orchestrationID).Append(newEntry); err != nil {
-		return fmt.Errorf("failed to append task output to log: %w", err)
+		w.LogManager.Logger.Error().Err(err).Msgf("Cannot append task %s output to Log for orchestration %s", w.TaskID, orchestrationID)
+		return w.LogManager.AppendFailureToLog(
+			orchestrationID,
+			w.TaskID,
+			w.ServiceID,
+			fmt.Errorf("failed to append task output to log: %w", err).Error())
 	}
 
-	//return w.LogManager.checkOrchestrationCompletion(orchestrationID)
 	return nil
+}
+
+func (w *TaskWorker) executeTaskWithRetry(ctx context.Context, orchestrationID string) (json.RawMessage, error) {
+	var result json.RawMessage
+	var err error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		result, err = w.executeTask(ctx, orchestrationID)
+		if err == nil {
+			return result, nil
+		}
+
+		if !isRetryableError(err) {
+			return nil, err
+		}
+
+		delay := calculateBackoff(attempt)
+		w.LogManager.Logger.Info().
+			Str("taskID", w.TaskID).
+			Int("attempt", attempt+1).
+			Dur("delay", delay).
+			Msg("Task execution failed, retrying")
+
+		select {
+		case <-time.After(delay):
+			// Continue to next iteration
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	return nil, fmt.Errorf("max retries reached, last error: %w", err)
 }
 
 func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (json.RawMessage, error) {
@@ -156,6 +205,9 @@ func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (j
 	errChan := make(chan error, 1)
 
 	go func() {
+		svcConn.mu.Lock()
+		defer svcConn.mu.Unlock()
+
 		if err := svcConn.Conn.WriteJSON(task); err != nil {
 			errChan <- fmt.Errorf("failed to send task: %w", err)
 			return
@@ -236,4 +288,26 @@ func containsAll(s map[string]json.RawMessage, e map[string]struct{}) bool {
 		}
 	}
 	return true
+}
+
+func calculateBackoff(attempt int) time.Duration {
+	delay := float64(baseDelay) * math.Pow(2, float64(attempt))
+	jitter := rand.Float64() * float64(time.Second)
+	delay += jitter
+
+	if delay > float64(maxDelay) {
+		delay = float64(maxDelay)
+	}
+
+	return time.Duration(delay)
+}
+
+func isRetryableError(err error) bool {
+	// Implement logic to determine if the error is retryable
+	// For example, timeouts and connection errors might be retryable,
+	// while validation errors might not be.
+	// This is a simplified example:
+	return err.Error() == "task execution timed out" ||
+		err.Error() == "failed to send task" ||
+		err.Error() == "failed to read result"
 }

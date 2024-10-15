@@ -235,6 +235,13 @@ func (p *ControlPlane) CreateAndStartWorkers(orchestrationID string, plan *Servi
 	}
 
 	if len(resultDependencies) == 0 {
+		p.Logger.Error().
+			Fields(map[string]any{
+				"Dependencies":    resultDependencies,
+				"OrchestrationID": orchestrationID,
+			}).
+			Msg("Result Aggregator has no dependencies")
+
 		return
 	}
 
@@ -249,8 +256,13 @@ func (p *ControlPlane) CreateAndStartWorkers(orchestrationID string, plan *Servi
 	ctx, cancel := context.WithCancel(context.Background())
 	p.logWorkers[orchestrationID][ResultAggregatorID] = cancel
 
+	fTracker := NewFailureTracker(p.LogManager)
+	fCtx, fCancel := context.WithCancel(context.Background())
+	p.logWorkers[orchestrationID][FailureTrackerID] = fCancel
+
 	p.Logger.Debug().Str("orchestrationID", orchestrationID).Msg("Starting result aggregator for orchestration")
 	go aggregator.Start(ctx, orchestrationID)
+	go fTracker.Start(fCtx, orchestrationID)
 }
 
 func (p *ControlPlane) CleanupLogWorkers(orchestrationID string) {
@@ -295,7 +307,8 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 			Err(fmt.Errorf("error discovering services: %w", err))
 
 		orchestration.Status = Failed
-		orchestration.Error = err.Error()
+		marshaledErr, _ := json.Marshal(err.Error())
+		orchestration.Error = marshaledErr
 		return
 	}
 
@@ -306,14 +319,16 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 			Err(fmt.Errorf("error decomposing action: %w", err))
 
 		orchestration.Status = Failed
-		orchestration.Error = fmt.Sprintf("Error decomposing action: %s", err.Error())
+		marshaledErr, _ := json.Marshal(fmt.Sprintf("Error decomposing action: %s", err.Error()))
+		orchestration.Error = marshaledErr
 		return
 	}
 
 	if p.cannotExecuteAction(callingPlan.Tasks) {
 		orchestration.Plan = callingPlan
 		orchestration.Status = NotActionable
-		orchestration.Error = string(callingPlan.Tasks[0].Input["error"])
+		marshaledErr, _ := json.Marshal(callingPlan.Tasks[0].Input["error"])
+		orchestration.Error = marshaledErr
 		return
 	}
 
@@ -325,26 +340,30 @@ func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 
 		orchestration.Plan = callingPlan
 		orchestration.Status = Failed
-		orchestration.Error = fmt.Sprintf("Error locating task zero in calling plan")
+		marshaledErr, _ := json.Marshal(fmt.Sprintf("Error locating task zero in calling plan"))
+		orchestration.Error = marshaledErr
 		return
 	}
 
 	taskZeroInput, err := json.Marshal(taskZero.Input)
 	if err != nil {
 		orchestration.Status = Failed
-		orchestration.Error = fmt.Sprintf("Failed to convert task zero into valid params: %v", err)
+		marshaledErr, _ := json.Marshal(fmt.Sprintf("Failed to convert task zero into valid params: %v", err))
+		orchestration.Error = marshaledErr
 		return
 	}
 
 	if err = p.validateInput(services, onlyServicesCallingPlan.Tasks); err != nil {
 		orchestration.Status = Failed
-		orchestration.Error = fmt.Sprintf("Error validating plan input/output: %s", err.Error())
+		marshaledErr, _ := json.Marshal(fmt.Sprintf("Error validating plan input/output: %s", err.Error()))
+		orchestration.Error = marshaledErr
 		return
 	}
 
 	if err := p.addServiceDetails(services, onlyServicesCallingPlan.Tasks); err != nil {
 		orchestration.Status = Failed
-		orchestration.Error = fmt.Sprintf("Error adding service details to calling plan: %s", err.Error())
+		marshaledErr, _ := json.Marshal(fmt.Sprintf("Error adding service details to calling plan: %s", err.Error()))
+		orchestration.Error = marshaledErr
 		return
 	}
 
@@ -398,21 +417,10 @@ func (p *ControlPlane) executeOrchestration(orchestration *Orchestration) {
 	}
 }
 
-// extractDependencyID extracts the task ID from a dependency reference
-// Example: "$task0.param1" returns "task0"
-func extractDependencyID(input string) string {
-	matches := dependencyPattern.FindStringSubmatch(input)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-
-	return ""
-}
-
 func (p *ControlPlane) FinalizeOrchestration(
 	orchestrationID string,
 	status Status,
-	reason string,
+	reason json.RawMessage,
 	results []json.RawMessage) error {
 	p.orchestrationStoreMu.Lock()
 	defer p.orchestrationStoreMu.Unlock()
@@ -449,7 +457,7 @@ func (p *ControlPlane) triggerWebhook(orchestration *Orchestration) error {
 		OrchestrationID string            `json:"orchestrationId"`
 		Results         []json.RawMessage `json:"results"`
 		Status          Status            `json:"status"`
-		Error           string            `json:"error,omitempty"`
+		Error           json.RawMessage   `json:"error,omitempty"`
 	}{
 		OrchestrationID: orchestration.ID,
 		Results:         orchestration.Results,
@@ -587,4 +595,15 @@ func (s *SubTask) extractDependencies() DependencyKeys {
 		}
 	}
 	return out
+}
+
+// extractDependencyID extracts the task ID from a dependency reference
+// Example: "$task0.param1" returns "task0"
+func extractDependencyID(input string) string {
+	matches := dependencyPattern.FindStringSubmatch(input)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+
+	return ""
 }

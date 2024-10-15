@@ -13,6 +13,7 @@ import (
 const (
 	TaskZero           = "task0"
 	ResultAggregatorID = "result_aggregator"
+	FailureTrackerID   = "failure_tracker"
 )
 
 var LogsRetentionPeriod = time.Hour * 24

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -44,7 +43,6 @@ func (r *ResultAggregator) Start(ctx context.Context, orchestrationID string) {
 						"Result aggregator failed to process entry for orchestration: %s",
 						orchestrationID,
 					)
-				r.LogManager.FailOrchestration(orchestrationID, fmt.Sprintf("Result aggregator failed: %v", err))
 				return
 			}
 		case <-ctx.Done():
@@ -104,11 +102,16 @@ func (r *ResultAggregator) processEntry(entry LogEntry, orchestrationID string) 
 
 	// Mark this entry as processed
 	r.logState.Processed[entry.ID] = true
-	completed, err := r.LogManager.MarkTaskCompleted(orchestrationID, entry.ID)
+
+	if _, err := r.LogManager.MarkTaskCompleted(orchestrationID, entry.ID); err != nil {
+		return r.LogManager.AppendFailureToLog(orchestrationID, ResultAggregatorID, ResultAggregatorID, err.Error())
+	}
+
+	completed, err := r.LogManager.MarkOrchestrationCompleted(orchestrationID)
 	if err != nil {
-		return err
+		return r.LogManager.AppendFailureToLog(orchestrationID, ResultAggregatorID, ResultAggregatorID, err.Error())
 	}
 	results := r.logState.DependencyState.SortedValues()
 
-	return r.LogManager.FinalizeOrchestration(orchestrationID, completed, "", results[len(results)-1])
+	return r.LogManager.FinalizeOrchestration(orchestrationID, completed, nil, results[len(results)-1])
 }
