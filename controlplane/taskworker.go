@@ -7,12 +7,14 @@ import (
 	"math"
 	"math/rand"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
 	maxRetries = 5
-	baseDelay  = 1 * time.Second
-	maxDelay   = 30 * time.Second
+	baseDelay  = 5 * time.Second
+	maxDelay   = 60 * time.Second
 )
 
 func NewTaskWorker(serviceID string, taskID string, dependencies DependencyKeys, logManager *LogManager) LogWorker {
@@ -187,13 +189,12 @@ func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (j
 		return nil, fmt.Errorf("failed to marshal input for task %s: %w", w.TaskID, err)
 	}
 
-	svcConn := w.LogManager.controlPlane.GetServiceConnection(w.ServiceID)
-	if svcConn == nil {
-		return nil, fmt.Errorf("ServiceID %s has no connection", w.ServiceID)
-	}
+	// Generate a unique execution ID
+	executionID := uuid.New().String()
 
 	task := &Task{
 		ID:              w.TaskID,
+		ExecutionID:     executionID,
 		Input:           input,
 		ServiceID:       w.ServiceID,
 		OrchestrationID: orchestrationID,
@@ -204,27 +205,17 @@ func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (j
 	resultChan := make(chan json.RawMessage, 1)
 	errChan := make(chan error, 1)
 
-	go func() {
-		svcConn.mu.Lock()
-		defer svcConn.mu.Unlock()
-
-		if err := svcConn.Conn.WriteJSON(task); err != nil {
-			errChan <- fmt.Errorf("failed to send task: %w", err)
-			return
+	w.LogManager.controlPlane.WebSocketManager.RegisterTaskCallback(executionID, func(result json.RawMessage, err error) {
+		if err != nil {
+			errChan <- err
+		} else {
+			resultChan <- result
 		}
+	})
 
-		var result struct {
-			TaskID string          `json:"taskId"`
-			Result json.RawMessage `json:"result"`
-		}
-
-		if err := svcConn.Conn.ReadJSON(&result); err != nil {
-			errChan <- fmt.Errorf("failed to read result: %w", err)
-			return
-		}
-
-		resultChan <- result.Result
-	}()
+	if err := w.LogManager.controlPlane.WebSocketManager.SendTask(w.ServiceID, task); err != nil {
+		return nil, fmt.Errorf("failed to send task: %w", err)
+	}
 
 	select {
 	case result := <-resultChan:
@@ -233,7 +224,8 @@ func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (j
 		return nil, err
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(30 * time.Second):
+	case <-time.After(maxDelay * time.Second):
+		w.LogManager.controlPlane.WebSocketManager.UnregisterTaskCallback(executionID)
 		return nil, fmt.Errorf("task execution timed out")
 	}
 }

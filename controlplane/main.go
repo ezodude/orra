@@ -26,12 +26,17 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	wsManager := NewWebSocketManager(app.Logger)
 	logManager := NewLogManager(ctx, LogsRetentionPeriod, plane)
 	logManager.Logger = app.Logger
 	plane.LogManager = logManager
+	plane.WebSocketManager = wsManager
+	plane.TidyWebSocketArtefacts(ctx)
 
 	app.Plane = plane
 	app.Router = mux.NewRouter()
 	app.configureRoutes()
+	app.configureWebSocket()
 	app.Run()
 }

@@ -14,10 +14,15 @@ const (
 	TaskZero           = "task0"
 	ResultAggregatorID = "result_aggregator"
 	FailureTrackerID   = "failure_tracker"
+	WSPing             = "ping"
+	WSPong             = "pong"
 )
 
-var LogsRetentionPeriod = time.Hour * 24
-var dependencyPattern = regexp.MustCompile(`^\$([^.]+)\.`)
+var (
+	LogsRetentionPeriod = time.Hour * 24
+	MaxQueueSize        = 1000
+	DependencyPattern   = regexp.MustCompile(`^\$([^.]+)\.`)
+)
 
 type Config struct {
 	Port       int `envconfig:"default=8005"`

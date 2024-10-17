@@ -15,7 +15,6 @@ import (
 
 func NewControlPlane(openAIKey string) *ControlPlane {
 	plane := &ControlPlane{
-		wsConnections:      make(map[string]*ServiceConnection),
 		projects:           make(map[string]*Project),
 		services:           make(map[string][]*ServiceInfo),
 		orchestrationStore: make(map[string]*Orchestration),
@@ -284,17 +283,6 @@ func (p *ControlPlane) CleanupLogWorkers(orchestrationID string) {
 	}
 }
 
-func (p *ControlPlane) GetServiceConnection(serviceID string) *ServiceConnection {
-	p.wsConnectionsMutex.RLock()
-	defer p.wsConnectionsMutex.RUnlock()
-
-	conn, exists := p.wsConnections[serviceID]
-	if !exists {
-		return nil
-	}
-	return conn
-}
-
 func (p *ControlPlane) prepareOrchestration(orchestration *Orchestration) {
 	p.orchestrationStoreMu.Lock()
 	defer p.orchestrationStoreMu.Unlock()
@@ -534,6 +522,15 @@ func (p *ControlPlane) GetProjectByApiKey(key string) (*Project, error) {
 	}
 }
 
+func (p *ControlPlane) ServiceBelongsToProject(svcID, projectID string) bool {
+	for _, service := range p.services[projectID] {
+		if service.ID == svcID {
+			return true
+		}
+	}
+	return false
+}
+
 func (s ServiceSchema) InputIncludes(src string) bool {
 	return s.Input.IncludesProp(src)
 }
@@ -600,7 +597,7 @@ func (s *SubTask) extractDependencies() DependencyKeys {
 // extractDependencyID extracts the task ID from a dependency reference
 // Example: "$task0.param1" returns "task0"
 func extractDependencyID(input string) string {
-	matches := dependencyPattern.FindStringSubmatch(input)
+	matches := DependencyPattern.FindStringSubmatch(input)
 	if len(matches) > 1 {
 		return matches[1]
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/olahol/melody"
 	"github.com/rs/zerolog"
 )
 
@@ -16,13 +18,53 @@ type ControlPlane struct {
 	services             map[string][]*ServiceInfo
 	orchestrationStore   map[string]*Orchestration
 	orchestrationStoreMu sync.RWMutex
-	wsConnections        map[string]*ServiceConnection
-	wsConnectionsMutex   sync.RWMutex
 	LogManager           *LogManager
 	logWorkers           map[string]map[string]context.CancelFunc
 	workerMu             sync.RWMutex
+	WebSocketManager     *WebSocketManager
 	openAIKey            string
 	Logger               zerolog.Logger
+}
+
+func (p *ControlPlane) TidyWebSocketArtefacts(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				p.WebSocketManager.CleanupExpiredMessages()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+type WebSocketMessageQueue struct {
+	*list.List
+	mu sync.Mutex
+}
+
+type WebSocketQueuedMessage struct {
+	Message json.RawMessage
+	Time    time.Time
+}
+
+type WebSocketCallback func(json.RawMessage, error)
+
+type WebSocketManager struct {
+	melody            *melody.Melody
+	logger            zerolog.Logger
+	connMap           map[string]*melody.Session
+	connMu            sync.RWMutex
+	taskCallbacks     map[string]WebSocketCallback
+	callbacksMu       sync.RWMutex
+	messageQueues     map[string]*WebSocketMessageQueue
+	messageQueuesMu   sync.RWMutex
+	messageExpiration time.Duration
+	pingInterval      time.Duration
+	pongWait          time.Duration
 }
 
 type Project struct {
@@ -114,6 +156,7 @@ type TaskWorker struct {
 type Task struct {
 	ID              string          `json:"id"`
 	Input           json.RawMessage `json:"input"`
+	ExecutionID     string          `json:"executionId"`
 	ServiceID       string          `json:"-"`
 	OrchestrationID string          `json:"-"`
 	ProjectID       string          `json:"-"`

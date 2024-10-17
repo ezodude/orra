@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/olahol/melody"
 	"github.com/rs/zerolog"
 )
 
@@ -50,6 +51,26 @@ func (app *App) configureRoutes() *App {
 	app.Router.HandleFunc("/register/agent", app.APIKeyMiddleware(app.RegisterAgent)).Methods("POST")
 	app.Router.HandleFunc("/ws", app.HandleWebSocket)
 	return app
+}
+
+func (app *App) configureWebSocket() {
+	app.Plane.WebSocketManager.melody.HandleConnect(func(s *melody.Session) {
+		serviceID := s.Request.URL.Query().Get("serviceId")
+		app.Plane.WebSocketManager.HandleConnection(serviceID, s)
+	})
+
+	app.Plane.WebSocketManager.melody.HandleDisconnect(func(s *melody.Session) {
+		serviceID, exists := s.Get("serviceID")
+		if !exists {
+			app.Logger.Error().Msg("serviceID missing from disconnected session")
+			return
+		}
+		app.Plane.WebSocketManager.HandleDisconnection(serviceID.(string))
+	})
+
+	app.Plane.WebSocketManager.melody.HandleMessage(func(s *melody.Session, msg []byte) {
+		app.Plane.WebSocketManager.HandleMessage(s, msg)
+	})
 }
 
 func (app *App) Run() {
@@ -132,11 +153,6 @@ func (app *App) RegisterServiceOrAgent(w http.ResponseWriter, r *http.Request, s
 
 	// need a better to add services that avoid duplicating service registration
 	app.Plane.services[project.ID] = append(app.Plane.services[project.ID], &service)
-	app.Plane.wsConnectionsMutex.Lock()
-	app.Plane.wsConnections[service.ID] = &ServiceConnection{
-		Status: Disconnected,
-	}
-	app.Plane.wsConnectionsMutex.Unlock()
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"id":     service.ID,
@@ -202,25 +218,26 @@ func (app *App) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	serviceId := r.URL.Query().Get("serviceId")
-	conn, err := upgrader.Upgrade(w, r, nil)
+	serviceID := r.URL.Query().Get("serviceId")
+
+	// Perform API key authentication
+	apiKey := r.URL.Query().Get("apiKey")
+	project, err := app.Plane.GetProjectByApiKey(apiKey)
 	if err != nil {
-		app.Logger.Error().Msgf("Failed to upgrade the HTTP server connection to the WebSocket protocol for service %s.", serviceId)
+		app.Logger.Error().Err(err).Msg("Invalid API key for WebSocket connection")
+		errs.HTTPErrorResponse(w, app.Logger, errs.E(errs.Unauthorized, err))
 		return
 	}
 
-	app.Plane.wsConnectionsMutex.Lock()
-	serviceConn, ok := app.Plane.wsConnections[serviceId]
-	if !ok {
-		app.Logger.Debug().Msgf("ServiceID %s not registered", serviceId)
-		if err := conn.Close(); err != nil {
-			app.Logger.Error().Msgf("Error closing websocket after discovering ServiceID %s not registered", serviceId)
-			return
-		}
+	if !app.Plane.ServiceBelongsToProject(serviceID, project.ID) {
+		app.Logger.Error().Str("serviceID", serviceID).Msg("Service not found for the given project")
+		errs.HTTPErrorResponse(w, app.Logger, errs.E(errs.Unauthorized, err))
 		return
 	}
-	serviceConn.Conn = conn
-	serviceConn.Status = Connected
 
-	app.Plane.wsConnectionsMutex.Unlock()
+	if err := app.Plane.WebSocketManager.melody.HandleRequest(w, r); err != nil {
+		app.Logger.Error().Str("serviceID", serviceID).Msg("Failed to handle request using the WebSocket")
+		errs.HTTPErrorResponse(w, app.Logger, errs.E(errs.Unanticipated, err))
+		return
+	}
 }

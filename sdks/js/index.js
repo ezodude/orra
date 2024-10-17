@@ -7,8 +7,11 @@ class OrraSDK {
 	#taskHandler;
 	serviceId;
 	#reconnectAttempts = 0;
-	#maxReconnectAttempts = 5;
-	#reconnectInterval = 5000; // 5 seconds
+	#maxReconnectAttempts = 10;
+	#reconnectInterval = 1000; // 1 seconds
+	#maxReconnectInterval = 30000 // Max 30 seconds
+	#messageQueue = [];
+	#isConnected = false;
 	
 	constructor(apiUrl, apiKey) {
 		this.#apiUrl = apiUrl;
@@ -48,7 +51,7 @@ class OrraSDK {
 			throw new Error(`${kind} ID was not received after registration`);
 		}
 		
-		this.#setupWebSocket(this.serviceId);
+		this.#connect();
 		return this;
 	}
 	
@@ -68,46 +71,95 @@ class OrraSDK {
 		return this.#registerServiceOrAgent(name, "agent", opts);
 	}
 	
-	#setupWebSocket(serviceId) {
-		this.#ws = new WebSocket(`${this.#apiUrl.replace('http', 'ws')}/ws?serviceId=${serviceId}`);
+	#connect() {
+		const wsUrl = this.#apiUrl.replace('http', 'ws');
+		this.#ws = new WebSocket(`${wsUrl}/ws?serviceId=${this.serviceId}&apiKey=${this.#apiKey}`);
+		
+		this.#ws.onopen = () => {
+			this.#isConnected = true;
+			this.#reconnectAttempts = 0;
+			this.#reconnectInterval = 1000;
+			this.#sendQueuedMessages();
+		};
 		
 		this.#ws.onmessage = async (event) => {
-			if (!this.#taskHandler) return;
-			
-			const task = JSON.parse(event.data);
-			try {
-				const result = await this.#taskHandler(task);
-				this.#ws.send(JSON.stringify({ taskId: task.id, result }));
-			} catch (error) {
-				console.error('Error handling task:', error);
-				this.#ws.send(JSON.stringify({ taskId: task.id, error: error.message }));
+			const data = event.data;
+			if (data === 'ping') {
+				this.#ws.send(JSON.stringify({ type: 'pong' }));
+			} else {
+				// Handle other messages
+				if (!this.#taskHandler) return;
+				
+				const task = JSON.parse(event.data);
+				const { id: taskId, executionId } = task;
+				
+				try {
+					const result = await this.#taskHandler(task);
+					this.#sendTaskResult(taskId, executionId, result);
+				} catch (error) {
+					console.error('Error handling task:', error);
+					this.#sendTaskResult(taskId, executionId, null, error.message);
+				}
 			}
+		};
+		
+		this.#ws.onclose = async (event) => {
+			this.#isConnected = false;
+			if (event.wasClean) {
+				console.log(`WebSocket closed cleanly, code=${event.code}, reason=${event.reason}`);
+			} else {
+				console.log('WebSocket connection died');
+			}
+			await this.#reconnect();
 		};
 		
 		this.#ws.onerror = (error) => {
 			console.error('WebSocket error:', error);
 		};
-		
-		this.#ws.onclose = () => {
-			console.log('WebSocket closed. Attempting to reconnect...');
-			this.#reconnect();
-		};
 	}
 	
 	async #reconnect() {
 		if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
-			console.error('Max reconnection attempts reached. Please check your connection.');
+			console.log('Max reconnection attempts reached. Giving up.');
 			return;
 		}
 		
 		this.#reconnectAttempts++;
+		const delay = Math.min(this.#reconnectInterval * Math.pow(2, this.#reconnectAttempts), this.#maxReconnectInterval);
 		
-		try {
-			await this.#setupWebSocket(this.serviceId);
-			this.#reconnectAttempts = 0;
-		} catch (error) {
-			console.error('Reconnection error:', error);
-			setTimeout(() => this.#reconnect(), this.#reconnectInterval);
+		console.log(`Attempting to reconnect in ${delay}ms...`);
+		
+		setTimeout(async () => {
+			console.log('Reconnecting...');
+			await this.#connect();
+		}, delay);
+	}
+	
+	#sendTaskResult(taskId, executionId, result, error = null) {
+		const message = {
+			type: 'task_result',
+			taskId,
+			executionId,
+			result,
+			error
+		};
+		this.#sendMessage(message);
+	}
+	
+	#sendMessage(message) {
+		if (this.#isConnected && this.#ws.readyState === WebSocket.OPEN) {
+			this.#ws.send(JSON.stringify(message));
+		} else {
+			console.log('WebSocket is not open. Queueing message.');
+			this.#messageQueue.push(message);
+		}
+	}
+	
+	#sendQueuedMessages() {
+		while (this.#messageQueue.length > 0 && this.#isConnected && this.#ws.readyState === WebSocket.OPEN) {
+			const message = this.#messageQueue.shift();
+			this.#ws.send(JSON.stringify(message));
+			console.log('Sent queued message:', message);
 		}
 	}
 	
