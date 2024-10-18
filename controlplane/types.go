@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/olahol/melody"
 	"github.com/rs/zerolog"
 )
@@ -71,12 +70,6 @@ type Project struct {
 	ID      string `json:"id"`
 	APIKey  string `json:"apiKey"`
 	Webhook string `json:"webhook"`
-}
-
-type ServiceConnection struct {
-	Status ServiceStatus
-	Conn   *websocket.Conn
-	mu     sync.Mutex
 }
 
 type OrchestrationState struct {
