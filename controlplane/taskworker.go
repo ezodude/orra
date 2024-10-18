@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
+var (
 	maxRetries = 5
 	baseDelay  = 5 * time.Second
 	maxDelay   = 60 * time.Second
