@@ -111,10 +111,3 @@ func (st *ServiceType) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
-
-type ServiceStatus int
-
-const (
-	Disconnected ServiceStatus = iota + 1
-	Connected
-)
