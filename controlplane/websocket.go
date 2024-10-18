@@ -12,8 +12,6 @@ import (
 
 func NewWebSocketManager(logger zerolog.Logger) *WebSocketManager {
 	m := melody.New()
-	m.Config.PongWait = time.Second * 60
-	m.Config.PingPeriod = 30 * time.Second
 	m.Config.ConcurrentMessageHandling = true
 	m.Config.WriteWait = time.Second * 120
 

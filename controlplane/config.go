@@ -22,6 +22,7 @@ var (
 	LogsRetentionPeriod = time.Hour * 24
 	MaxQueueSize        = 1000
 	DependencyPattern   = regexp.MustCompile(`^\$([^.]+)\.`)
+	WSWriteTimeOut      = time.Second * 120
 )
 
 type Config struct {
