@@ -9,6 +9,22 @@ import (
 	"time"
 )
 
+func NewLogManager(_ context.Context, retention time.Duration, controlPlane *ControlPlane) *LogManager {
+	lm := &LogManager{
+		logs:           make(map[string]*Log),
+		orchestrations: make(map[string]*OrchestrationState),
+		retention:      retention,
+		cleanupTicker:  time.NewTicker(5 * time.Minute),
+		webhookClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		controlPlane: controlPlane,
+	}
+
+	//go lm.startCleanup(ctx)
+	return lm
+}
+
 func (lm *LogManager) startCleanup(ctx context.Context) {
 	for {
 		select {
@@ -38,47 +54,6 @@ func (lm *LogManager) GetLog(orchestrationID string) *Log {
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
 	return lm.logs[orchestrationID]
-}
-
-func (l *Log) Append(entry LogEntry) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	entry.Offset = l.CurrentOffset
-	entry.Timestamp = time.Now()
-
-	l.Entries = append(l.Entries, entry)
-	l.CurrentOffset++
-	l.lastAccessed = time.Now()
-
-	return nil
-}
-
-func (l *Log) ReadFrom(offset uint64) []LogEntry {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	if offset >= l.CurrentOffset {
-		return nil
-	}
-
-	return l.Entries[offset:]
-}
-
-func NewLogManager(_ context.Context, retention time.Duration, controlPlane *ControlPlane) *LogManager {
-	lm := &LogManager{
-		logs:           make(map[string]*Log),
-		orchestrations: make(map[string]*OrchestrationState),
-		retention:      retention,
-		cleanupTicker:  time.NewTicker(5 * time.Minute),
-		webhookClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		controlPlane: controlPlane,
-	}
-
-	//go lm.startCleanup(ctx)
-	return lm
 }
 
 func (lm *LogManager) CreateLog(orchestrationID string, plan *ServiceCallingPlan) *Log {
@@ -191,6 +166,37 @@ func (lm *LogManager) FinalizeOrchestration(orchestrationID string, status Statu
 	delete(lm.orchestrations, orchestrationID)
 
 	return nil
+}
+
+func (l *Log) Append(entry LogEntry) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	entry.Offset = l.CurrentOffset
+	entry.Timestamp = time.Now()
+
+	l.Entries = append(l.Entries, entry)
+	l.CurrentOffset += 1
+	l.lastAccessed = time.Now()
+
+	return nil
+}
+
+func (l *Log) ReadFrom(offset uint64) []LogEntry {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if offset >= l.CurrentOffset {
+		return nil
+	}
+
+	return l.Entries[offset:]
+}
+
+func (l *Log) GetCurrentOffset() uint64 {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.CurrentOffset
 }
 
 func (d DependencyState) SortedValues() []json.RawMessage {
