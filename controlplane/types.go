@@ -121,7 +121,7 @@ type LogState struct {
 
 type LogWorker interface {
 	Start(ctx context.Context, orchestrationID string)
-	PollLog(ctx context.Context, logStream *Log, entriesChan chan<- LogEntry)
+	PollLog(ctx context.Context, orchestrationID string, logStream *Log, entriesChan chan<- LogEntry)
 }
 
 type ResultAggregator struct {
