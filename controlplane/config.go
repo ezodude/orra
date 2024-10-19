@@ -19,10 +19,11 @@ const (
 )
 
 var (
-	LogsRetentionPeriod = time.Hour * 24
-	MaxQueueSize        = 1000
-	DependencyPattern   = regexp.MustCompile(`^\$([^.]+)\.`)
-	WSWriteTimeOut      = time.Second * 120
+	LogsRetentionPeriod       = time.Hour * 24
+	MaxQueueSize              = 1000
+	DependencyPattern         = regexp.MustCompile(`^\$([^.]+)\.`)
+	WSWriteTimeOut            = time.Second * 120
+	WSMaxMessageBytes   int64 = 10 * 1024 // 10K
 )
 
 type Config struct {
