@@ -12,7 +12,6 @@ import (
 	"github.com/gilcrest/diygoapi/errs"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 	"github.com/olahol/melody"
 	"github.com/rs/zerolog"
 )
@@ -24,12 +23,6 @@ type App struct {
 	Router *mux.Router
 	Cfg    Config
 	Logger zerolog.Logger
-}
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for this example
-	},
 }
 
 func NewApp(cfg Config, args []string) (*App, error) {
@@ -55,8 +48,19 @@ func (app *App) configureRoutes() *App {
 
 func (app *App) configureWebSocket() {
 	app.Plane.WebSocketManager.melody.HandleConnect(func(s *melody.Session) {
-		serviceID := s.Request.URL.Query().Get("serviceId")
-		app.Plane.WebSocketManager.HandleConnection(serviceID, s)
+		apiKey := s.Request.URL.Query().Get("apiKey")
+		project, err := app.Plane.GetProjectByApiKey(apiKey)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("Invalid API key for WebSocket connection")
+			return
+		}
+		svcID := s.Request.URL.Query().Get("serviceId")
+		svcName, err := app.Plane.GetServiceName(project.ID, svcID)
+		if err != nil {
+			app.Logger.Error().Err(err).Msg("Unknown service for WebSocket connection")
+			return
+		}
+		app.Plane.WebSocketManager.HandleConnection(svcID, svcName, s)
 	})
 
 	app.Plane.WebSocketManager.melody.HandleDisconnect(func(s *melody.Session) {
