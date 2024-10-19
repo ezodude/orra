@@ -12,6 +12,8 @@ class OrraSDK {
 	#maxReconnectInterval = 30000 // Max 30 seconds
 	#messageQueue = [];
 	#isConnected = false;
+	#messageId = 0;
+	#pendingMessages = new Map();
 	
 	constructor(apiUrl, apiKey) {
 		this.#apiUrl = apiUrl;
@@ -82,35 +84,47 @@ class OrraSDK {
 			this.#sendQueuedMessages();
 		};
 		
-		this.#ws.onmessage = async (event) => {
+		this.#ws.onmessage = (event) => {
 			const data = event.data;
+			
 			if (data === 'ping') {
-				this.#ws.send(JSON.stringify({ type: 'pong' }));
-			} else {
-				// Handle other messages
-				if (!this.#taskHandler) return;
-				
-				const task = JSON.parse(event.data);
-				const { id: taskId, executionId } = task;
-				
-				try {
-					const result = await this.#taskHandler(task);
-					this.#sendTaskResult(taskId, executionId, result);
-				} catch (error) {
-					console.error('Error handling task:', error);
-					this.#sendTaskResult(taskId, executionId, null, error.message);
-				}
+				this.#handlePing();
+				return;
+			}
+			
+			let parsedData;
+			try {
+				parsedData = JSON.parse(data);
+			} catch (error) {
+				console.error('Failed to parse WebSocket message:', error);
+				return;
+			}
+			
+			switch (parsedData.type) {
+				case 'ACK':
+					this.#handleAcknowledgment(parsedData);
+					break;
+				case 'task':
+					this.#handleTask(parsedData);
+					break;
+				default:
+					console.warn('Received unknown message type:', parsedData.type);
 			}
 		};
 		
-		this.#ws.onclose = async (event) => {
+		this.#ws.onclose = (event) => {
 			this.#isConnected = false;
+			for (const message of this.#pendingMessages.values()) {
+				this.#messageQueue.push(message);
+			}
+			this.#pendingMessages.clear();
+			
 			if (event.wasClean) {
 				console.log(`WebSocket closed cleanly, code=${event.code}, reason=${event.reason}`);
 			} else {
 				console.log('WebSocket connection died');
 			}
-			await this.#reconnect();
+			this.#reconnect();
 		};
 		
 		this.#ws.onerror = (error) => {
@@ -118,7 +132,44 @@ class OrraSDK {
 		};
 	}
 	
-	async #reconnect() {
+	#handlePing() {
+		console.log("Received PING");
+		this.#sendPong();
+		console.log("Sent PONG");
+	}
+	
+	#sendPong() {
+		if (this.#isConnected && this.#ws.readyState === WebSocket.OPEN) {
+			this.#ws.send(JSON.stringify({ id: "pong", payload: { type: 'pong' } }));
+		}
+	}
+	
+	#handleAcknowledgment(data) {
+		console.log("Acknowledged sent message", data.id);
+		this.#pendingMessages.delete(data.id);
+	}
+	
+	#handleTask(task) {
+		if (!this.#taskHandler) {
+			console.warn('Received task but no task handler is set');
+			return;
+		}
+		
+		const { id: taskId, executionId } = task;
+		
+		Promise.resolve(this.#taskHandler(task))
+			.then((result) => {
+				console.log(`Handled task:`, task);
+				this.#sendTaskResult(taskId, executionId, result);
+			})
+			.catch((error) => {
+				console.error('Error handling task:', error);
+				this.#sendTaskResult(taskId, executionId, null, error.message);
+			});
+	}
+	
+	
+	#reconnect() {
 		if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
 			console.log('Max reconnection attempts reached. Giving up.');
 			return;
@@ -129,9 +180,9 @@ class OrraSDK {
 		
 		console.log(`Attempting to reconnect in ${delay}ms...`);
 		
-		setTimeout(async () => {
+		setTimeout(() => {
 			console.log('Reconnecting...');
-			await this.#connect();
+			this.#connect();
 		}, delay);
 	}
 	
@@ -147,10 +198,35 @@ class OrraSDK {
 	}
 	
 	#sendMessage(message) {
+		this.#messageId++
+		const id = `message_${this.#messageId}_${message.executionId}`;
+		const wrappedMessage = { id, payload: message };
+		
+		console.log("About to send message:", id);
 		if (this.#isConnected && this.#ws.readyState === WebSocket.OPEN) {
-			this.#ws.send(JSON.stringify(message));
+			
+			try {
+				this.#ws.send(JSON.stringify(wrappedMessage));
+				console.log("Sending message:", id);
+				this.#pendingMessages.set(id, message);
+				// Set a timeout to move message back to queue if no ACK received
+				setTimeout(() => this.#handleMessageTimeout(id), 5000);
+				
+			} catch (e) {
+				console.log('Message failed to send. Queueing message:', e.message);
+				this.#messageQueue.push(message);
+			}
+			
 		} else {
 			console.log('WebSocket is not open. Queueing message.');
+			this.#messageQueue.push(message);
+		}
+	}
+	
+	#handleMessageTimeout(id) {
+		if (this.#pendingMessages.has(id)) {
+			const message = this.#pendingMessages.get(id);
+			this.#pendingMessages.delete(id);
 			this.#messageQueue.push(message);
 		}
 	}
