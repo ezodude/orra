@@ -14,6 +14,7 @@ func NewWebSocketManager(logger zerolog.Logger) *WebSocketManager {
 	m := melody.New()
 	m.Config.ConcurrentMessageHandling = true
 	m.Config.WriteWait = WSWriteTimeOut
+	m.Config.MaxMessageSize = WSMaxMessageBytes
 
 	return &WebSocketManager{
 		melody:            m,
