@@ -14,7 +14,8 @@ import (
 
 type ControlPlane struct {
 	projects             map[string]*Project
-	services             map[string][]*ServiceInfo
+	services             map[string]map[string]*ServiceInfo
+	servicesMu           sync.RWMutex
 	orchestrationStore   map[string]*Orchestration
 	orchestrationStoreMu sync.RWMutex
 	LogManager           *LogManager
@@ -161,12 +162,13 @@ type ServiceSchema struct {
 }
 
 type ServiceInfo struct {
+	Type        ServiceType   `json:"type"`
 	ID          string        `json:"id"`
 	Name        string        `json:"name"`
 	Description string        `json:"description"`
 	Schema      ServiceSchema `json:"schema"`
-	Type        ServiceType   `json:"type"`
 	ProjectID   string        `json:"-"`
+	Version     int64         `json:"version"`
 }
 
 type Orchestration struct {
