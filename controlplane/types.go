@@ -25,21 +25,6 @@ type ControlPlane struct {
 	Logger               zerolog.Logger
 }
 
-func (p *ControlPlane) TidyWebSocketArtefacts(ctx context.Context) {
-	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				p.WebSocketManager.CleanupExpiredMessages()
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-}
-
 type WebSocketMessageQueue struct {
 	*list.List
 	mu sync.Mutex
