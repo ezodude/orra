@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,7 +43,7 @@ func (w *TaskWorker) Start(ctx context.Context, orchestrationID string) {
 	entriesChan := make(chan LogEntry, 100)
 
 	// Start a goroutine for continuous polling
-	go w.PollLog(ctx, logStream, entriesChan)
+	go w.PollLog(ctx, orchestrationID, logStream, entriesChan)
 
 	// Process entries as they come in
 	for {
@@ -66,23 +67,22 @@ func (w *TaskWorker) Start(ctx context.Context, orchestrationID string) {
 	}
 }
 
-func (w *TaskWorker) PollLog(ctx context.Context, logStream *Log, entriesChan chan<- LogEntry) {
+func (w *TaskWorker) PollLog(ctx context.Context, orchestrationID string, logStream *Log, entriesChan chan<- LogEntry) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			entries := logStream.ReadFrom(w.logState.LastOffset)
-			w.LogManager.Logger.Debug().
-				Interface("entries", entries).
-				Msgf("polling log entries for task %s", w.TaskID)
+			var processableEntries []LogEntry
 
+			entries := logStream.ReadFrom(w.logState.LastOffset)
 			for _, entry := range entries {
 				if !w.shouldProcess(entry) {
 					continue
 				}
 
+				processableEntries = append(processableEntries, entry)
 				select {
 				case entriesChan <- entry:
 					w.logState.LastOffset = entry.Offset + 1
@@ -90,6 +90,10 @@ func (w *TaskWorker) PollLog(ctx context.Context, logStream *Log, entriesChan ch
 					return
 				}
 			}
+
+			w.LogManager.Logger.Debug().
+				Interface("entries", processableEntries).
+				Msgf("polling entries for task %s - orchestration %s", w.TaskID, orchestrationID)
 		case <-ctx.Done():
 			return
 		}
@@ -98,15 +102,11 @@ func (w *TaskWorker) PollLog(ctx context.Context, logStream *Log, entriesChan ch
 
 func (w *TaskWorker) shouldProcess(entry LogEntry) bool {
 	_, isDependency := w.Dependencies[entry.ID]
-	return entry.Type == "task_output" && isDependency
+	processed := w.logState.Processed[entry.ID]
+	return entry.Type == "task_output" && isDependency && !processed
 }
 
 func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestrationID string) error {
-	// Skip if already processed
-	if processed, exists := w.logState.Processed[entry.ID]; exists && processed {
-		return nil
-	}
-
 	// Store the entry's output in our dependency state
 	w.logState.DependencyState[entry.ID] = entry.Value
 
@@ -206,15 +206,26 @@ func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (j
 	errChan := make(chan error, 1)
 
 	w.LogManager.controlPlane.WebSocketManager.RegisterTaskCallback(executionID, func(result json.RawMessage, err error) {
+
+		fields := map[string]any{
+			"executionID": executionID,
+			"result":      string(result),
+		}
+
 		if err != nil {
+			fields["error"] = err.Error()
 			errChan <- err
 		} else {
 			resultChan <- result
 		}
+
+		w.LogManager.Logger.Debug().
+			Fields(fields).
+			Msgf("Triggered a task callback: %s, for serviceID: %s", w.TaskID, w.ServiceID)
 	})
 
 	if err := w.LogManager.controlPlane.WebSocketManager.SendTask(w.ServiceID, task); err != nil {
-		return nil, fmt.Errorf("failed to send task: %w", err)
+		return nil, fmt.Errorf("failed to send task %s for service %s: %w", task.ID, w.ServiceID, err)
 	}
 
 	select {
@@ -299,7 +310,9 @@ func isRetryableError(err error) bool {
 	// For example, timeouts and connection errors might be retryable,
 	// while validation errors might not be.
 	// This is a simplified example:
-	return err.Error() == "task execution timed out" ||
-		err.Error() == "failed to send task" ||
-		err.Error() == "failed to read result"
+	errorMsg := strings.ToLower(err.Error())
+	return strings.Contains(errorMsg, "task execution timed out") ||
+		strings.Contains(errorMsg, "failed to send task") ||
+		strings.Contains(errorMsg, "failed to read result") ||
+		strings.Contains(errorMsg, "rate limit exceeded")
 }
