@@ -194,7 +194,7 @@ func (app *App) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
 	orchestration.Status = Pending
 	orchestration.ProjectID = project.ID
 
-	app.Plane.prepareOrchestration(&orchestration)
+	app.Plane.PrepareOrchestration(&orchestration)
 
 	if !orchestration.Executable() {
 		app.Logger.
@@ -204,7 +204,7 @@ func (app *App) OrchestrationsHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 	} else {
 		app.Logger.Debug().Msgf("About to execute orchestration %s", orchestration.ID)
-		go app.Plane.executeOrchestration(&orchestration)
+		go app.Plane.ExecuteOrchestration(&orchestration)
 		w.WriteHeader(http.StatusAccepted)
 	}
 
