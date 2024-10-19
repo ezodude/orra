@@ -27,7 +27,7 @@ func NewWebSocketManager(logger zerolog.Logger) *WebSocketManager {
 	}
 }
 
-func (wsm *WebSocketManager) HandleConnection(serviceID string, s *melody.Session) {
+func (wsm *WebSocketManager) HandleConnection(serviceID string, serviceName string, s *melody.Session) {
 	s.Set("serviceID", serviceID)
 	s.Set("lastPong", time.Now())
 
@@ -38,7 +38,10 @@ func (wsm *WebSocketManager) HandleConnection(serviceID string, s *melody.Sessio
 	go wsm.pingRoutine(s)
 	wsm.sendQueuedMessages(serviceID, s)
 
-	wsm.logger.Info().Str("serviceID", serviceID).Msg("New WebSocket connection established")
+	wsm.logger.Info().
+		Str("serviceID", serviceID).
+		Str("serviceName", serviceName).
+		Msg("New WebSocket connection established")
 }
 
 func (wsm *WebSocketManager) sendQueuedMessages(serviceID string, s *melody.Session) {
@@ -81,7 +84,12 @@ func (wsm *WebSocketManager) HandleDisconnection(serviceID string) {
 }
 
 func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
-	var message struct {
+	var messageWrapper struct {
+		ID      string          `json:"id"`
+		Payload json.RawMessage `json:"payload"`
+	}
+
+	var messagePayload struct {
 		Type        string          `json:"type"`
 		TaskID      string          `json:"taskId"`
 		ExecutionID string          `json:"executionId"`
@@ -89,19 +97,55 @@ func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
 		Error       string          `json:"error,omitempty"`
 	}
 
-	if err := json.Unmarshal(msg, &message); err != nil {
-		wsm.logger.Error().Err(err).Msg("Failed to unmarshal WebSocket message")
+	if err := json.Unmarshal(msg, &messageWrapper); err != nil {
+		wsm.logger.Error().Err(err).Msg("Failed to unmarshal wrapped WebSocket messageWrapper")
 		return
 	}
 
-	switch message.Type {
+	if err := json.Unmarshal(messageWrapper.Payload, &messagePayload); err != nil {
+		wsm.logger.Error().Err(err).Msg("Failed to unmarshal WebSocket messageWrapper payload")
+		return
+	}
+
+	if err := wsm.acknowledgeMessageReceived(s, messageWrapper.ID); err != nil {
+		wsm.logger.Error().Err(err).Msg("Failed to handle messageWrapper acknowledgement")
+		return
+	}
+
+	switch messagePayload.Type {
 	case WSPong:
 		s.Set("lastPong", time.Now())
 	case "task_result":
-		wsm.handleTaskResult(message)
+		wsm.handleTaskResult(messagePayload)
 	default:
-		wsm.logger.Warn().Str("type", message.Type).Msg("Received unknown message type")
+		wsm.logger.Warn().Str("type", messagePayload.Type).Msg("Received unknown messageWrapper type")
 	}
+}
+
+func (wsm *WebSocketManager) acknowledgeMessageReceived(s *melody.Session, id string) error {
+	if isPong := id == WSPong; isPong {
+		return nil
+	}
+
+	ack := struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	}{
+		Type: "ACK",
+		ID:   id,
+	}
+
+	acknowledgement, err := json.Marshal(ack)
+	if err != nil {
+		return fmt.Errorf("failed to marshal acknowledgement: %w", err)
+	}
+
+	if err := s.Write(acknowledgement); err != nil {
+		wsm.logger.Error().Err(err).Msg("Failed to send ACK")
+		return fmt.Errorf("failed to send acknowledgement of receipt: %w", err)
+	}
+
+	return nil
 }
 
 func (wsm *WebSocketManager) handleTaskResult(message struct {
@@ -120,11 +164,13 @@ func (wsm *WebSocketManager) handleTaskResult(message struct {
 		return
 	}
 
+	wsm.callbacksMu.Lock()
 	if message.Error != "" {
 		callback(nil, fmt.Errorf(message.Error))
 	} else {
 		callback(message.Result, nil)
 	}
+	wsm.callbacksMu.Unlock()
 
 	wsm.UnregisterTaskCallback(message.ExecutionID)
 }
@@ -135,10 +181,12 @@ func (wsm *WebSocketManager) SendTask(serviceID string, task *Task) error {
 	wsm.connMu.RUnlock()
 
 	message := struct {
+		Type        string          `json:"type"`
 		ID          string          `json:"id"`
 		ExecutionID string          `json:"executionId"`
 		Input       json.RawMessage `json:"input"`
 	}{
+		Type:        "task",
 		ID:          task.ID,
 		ExecutionID: task.ExecutionID,
 		Input:       task.Input,
