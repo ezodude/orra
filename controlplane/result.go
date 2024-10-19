@@ -29,7 +29,7 @@ func (r *ResultAggregator) Start(ctx context.Context, orchestrationID string) {
 	entriesChan := make(chan LogEntry, 100)
 
 	// Start a goroutine for continuous polling
-	go r.PollLog(ctx, logStream, entriesChan)
+	go r.PollLog(ctx, orchestrationID, logStream, entriesChan)
 
 	// Process entries as they come in
 	for {
@@ -52,23 +52,22 @@ func (r *ResultAggregator) Start(ctx context.Context, orchestrationID string) {
 	}
 }
 
-func (r *ResultAggregator) PollLog(ctx context.Context, logStream *Log, entriesChan chan<- LogEntry) {
+func (r *ResultAggregator) PollLog(ctx context.Context, orchestrationID string, logStream *Log, entriesChan chan<- LogEntry) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			entries := logStream.ReadFrom(r.logState.LastOffset)
-			r.LogManager.Logger.Debug().
-				Interface("entries", entries).
-				Msg("polling log entries for result aggregator in orchestration")
+			var processableEntries []LogEntry
 
+			entries := logStream.ReadFrom(r.logState.LastOffset)
 			for _, entry := range entries {
 				if !r.shouldProcess(entry) {
 					continue
 				}
 
+				processableEntries = append(processableEntries, entry)
 				select {
 				case entriesChan <- entry:
 					r.logState.LastOffset = entry.Offset + 1
@@ -76,6 +75,11 @@ func (r *ResultAggregator) PollLog(ctx context.Context, logStream *Log, entriesC
 					return
 				}
 			}
+
+			r.LogManager.Logger.Debug().
+				Interface("entries", processableEntries).
+				Msgf("polling log entries for result aggregator in orchestration: %s", orchestrationID)
+
 		case <-ctx.Done():
 			return
 		}
@@ -88,8 +92,7 @@ func (r *ResultAggregator) shouldProcess(entry LogEntry) bool {
 }
 
 func (r *ResultAggregator) processEntry(entry LogEntry, orchestrationID string) error {
-	// Skip if already processed
-	if processed, exists := r.logState.Processed[entry.ID]; exists && processed {
+	if _, exists := r.logState.DependencyState[entry.ID]; exists {
 		return nil
 	}
 
@@ -100,8 +103,8 @@ func (r *ResultAggregator) processEntry(entry LogEntry, orchestrationID string) 
 		return nil
 	}
 
-	// Mark this entry as processed
-	r.logState.Processed[entry.ID] = true
+	r.LogManager.Logger.Debug().
+		Msgf("All result aggregator dependencies have been processed for orchestration: %s", orchestrationID)
 
 	if _, err := r.LogManager.MarkTaskCompleted(orchestrationID, entry.ID); err != nil {
 		return r.LogManager.AppendFailureToLog(orchestrationID, ResultAggregatorID, ResultAggregatorID, err.Error())
