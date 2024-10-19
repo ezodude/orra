@@ -27,7 +27,7 @@ func (f *FailureTracker) Start(ctx context.Context, orchestrationID string) {
 	entriesChan := make(chan LogEntry, 100)
 
 	// Start a goroutine for continuous polling
-	go f.PollLog(ctx, logStream, entriesChan)
+	go f.PollLog(ctx, orchestrationID, logStream, entriesChan)
 
 	// Process entries as they come in
 	for {
@@ -50,23 +50,22 @@ func (f *FailureTracker) Start(ctx context.Context, orchestrationID string) {
 	}
 }
 
-func (f *FailureTracker) PollLog(ctx context.Context, logStream *Log, entriesChan chan<- LogEntry) {
+func (f *FailureTracker) PollLog(ctx context.Context, orchestrationID string, logStream *Log, entriesChan chan<- LogEntry) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			entries := logStream.ReadFrom(f.logState.LastOffset)
-			f.LogManager.Logger.Debug().
-				Interface("entries", entries).
-				Msg("polling log entries for failure tracker in orchestration")
+			var processableEntries []LogEntry
 
+			entries := logStream.ReadFrom(f.logState.LastOffset)
 			for _, entry := range entries {
 				if !f.shouldProcess(entry) {
 					continue
 				}
 
+				processableEntries = append(processableEntries, entry)
 				select {
 				case entriesChan <- entry:
 					f.logState.LastOffset = entry.Offset + 1
@@ -74,6 +73,10 @@ func (f *FailureTracker) PollLog(ctx context.Context, logStream *Log, entriesCha
 					return
 				}
 			}
+
+			f.LogManager.Logger.Debug().
+				Interface("entries", processableEntries).
+				Msgf("polling entries for failure tracker in orchestration: %s", orchestrationID)
 		case <-ctx.Done():
 			return
 		}
