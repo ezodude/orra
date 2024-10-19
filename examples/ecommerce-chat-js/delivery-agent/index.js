@@ -5,20 +5,17 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// Configuration from environment variables
-const sdkConfig = {
-	orraUrl: process.env.ORRA_URL,
-	orraKey: process.env.ORRA_API_KEY
-};
-
 // Validate environment variables
-if (!sdkConfig.orraUrl || !sdkConfig.orraKey) {
-	console.error('Error: ORRA_URL, ORRA_API_KEY and MISTRAL_API_KEY must be set in the environment variables');
+if (!process.env.ORRA_URL || !process.env.ORRA_API_KEY) {
+	console.error('Error: ORRA_URL and ORRA_API_KEY must be set in the environment variables');
 	process.exit(1);
 }
 
 // Create the Orra SDK client
-const orra = createClient(sdkConfig);
+const orra = createClient({
+	orraUrl: process.env.ORRA_URL,
+	orraKey: process.env.ORRA_API_KEY,
+});
 
 // Service details
 const agentName = 'DeliveryAgent';

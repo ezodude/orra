@@ -4,20 +4,17 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
-// Configuration from environment variables
-const config = {
-	orraUrl: process.env.ORRA_URL,
-	orraKey: process.env.ORRA_API_KEY
-};
-
 // Validate environment variables
-if (!config.orraUrl || !config.orraKey) {
+if (!process.env.ORRA_URL || !process.env.ORRA_API_KEY) {
 	console.error('Error: ORRA_URL and ORRA_API_KEY must be set in the environment variables');
 	process.exit(1);
 }
 
 // Create the Orra SDK client
-const orra = createClient(config);
+const orra = createClient({
+	orraUrl: process.env.ORRA_URL,
+	orraKey: process.env.ORRA_API_KEY,
+});
 
 // Service details
 const serviceName = 'EchoService';
@@ -28,14 +25,14 @@ const serviceSchema = {
 		properties: {
 			message: { type: 'string' }
 		},
-		required: ['message']
+		required: [ 'message' ]
 	},
 	output: {
 		type: 'object',
 		properties: {
 			echo: { type: 'string' }
 		},
-		required: ['echo']
+		required: [ 'echo' ]
 	}
 };
 
@@ -44,7 +41,7 @@ async function handleTask(task) {
 	console.log('Received task:', task);
 	
 	// Extract the message from the task input
-	const message  = task.input;
+	const message = task.input;
 	
 	// Echo the message back
 	const result = {

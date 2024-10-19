@@ -1,4 +1,8 @@
 import WebSocket from 'ws';
+import { promises as fs } from 'fs';
+import path from 'path';
+
+const DEFAULT_SERVICE_KEY_FILE= 'orra-service-key.json'
 
 class OrraSDK {
 	#apiUrl;
@@ -6,6 +10,8 @@ class OrraSDK {
 	#ws;
 	#taskHandler;
 	serviceId;
+	version;
+	persistenceOpts;
 	#reconnectAttempts = 0;
 	#maxReconnectAttempts = 10;
 	#reconnectInterval = 1000; // 1 seconds
@@ -15,19 +21,70 @@ class OrraSDK {
 	#messageId = 0;
 	#pendingMessages = new Map();
 	
-	constructor(apiUrl, apiKey) {
+	constructor(apiUrl, apiKey, persistenceOpts={}) {
 		this.#apiUrl = apiUrl;
 		this.#apiKey = apiKey;
 		this.#ws = null;
 		this.#taskHandler = null;
 		this.serviceId = null;
+		this.version = 0;
+		this.persistenceOpts = {
+			method: 'file', // 'file' or 'custom'
+			filePath: path.join(process.cwd(), DEFAULT_SERVICE_KEY_FILE),
+			customSave: null,
+			customLoad: null,
+			...persistenceOpts
+		};
+	}
+	
+	async saveServiceKey() {
+		if (this.persistenceOpts.method === 'file') {
+			const data = JSON.stringify({ serviceId: this.serviceId });
+			const filePath = this.persistenceOpts.filePath
+			const directoryPath = extractDirectoryFromFilePath(filePath);
+			await createDirectoryIfNotExists(directoryPath);
+			
+			await fs.writeFile(this.persistenceOpts.filePath, data, 'utf8');
+		} else if (this.persistenceOpts.method === 'custom' && typeof this.persistenceOpts.customSave === 'function') {
+			await this.persistenceOpts.customSave(this.serviceId);
+		}
+	}
+	
+	async loadServiceKey() {
+		try {
+			if (this.persistenceOpts.method === 'file') {
+				const data = await fs.readFile(this.persistenceOpts.filePath, 'utf8');
+				const parsed = JSON.parse(data);
+				this.serviceId = parsed.serviceId;
+			} else if (this.persistenceOpts.method === 'custom' && typeof this.persistenceOpts.customLoad === 'function') {
+				this.serviceId = await this.persistenceOpts.customLoad();
+			}
+		} catch (error) {
+			console.warn('Failed to load service key:', error);
+			// If loading fails, we'll keep the serviceKey as null and get a new one upon registration
+		}
+	}
+	
+	async registerService(name, opts = {
+		description: undefined,
+		schema: undefined,
+	}) {
+		return this.#registerServiceOrAgent(name, "service", opts);
+	}
+	
+	async registerAgent(name, opts = {
+		description: undefined,
+		schema: undefined,
+	}) {
+		return this.#registerServiceOrAgent(name, "agent", opts);
 	}
 	
 	async #registerServiceOrAgent(name, kind, opts = {
 		description: undefined,
 		schema: undefined,
-		version: '',
 	}) {
+		await this.loadServiceKey(); // Try to load an existing service id
+		
 		const response = await fetch(`${this.#apiUrl}/register/${kind}`, {
 			method: 'POST',
 			headers: {
@@ -35,9 +92,11 @@ class OrraSDK {
 				'Authorization': `Bearer ${this.#apiKey}`
 			},
 			body: JSON.stringify({
+				id: this.serviceId,
 				name: name,
 				description: opts?.description,
-				schema: opts?.schema
+				schema: opts?.schema,
+				version: this.version,
 			}),
 		});
 		
@@ -48,29 +107,14 @@ class OrraSDK {
 		
 		const data = await response.json();
 		this.serviceId = data.id;
-		
 		if (!this.serviceId) {
 			throw new Error(`${kind} ID was not received after registration`);
 		}
+		this.version = data.version;
+		await this.saveServiceKey(); // Save the new or updated key
 		
 		this.#connect();
 		return this;
-	}
-	
-	async registerService(name, opts = {
-		description: undefined,
-		schema: undefined,
-		version: '',
-	}) {
-		return this.#registerServiceOrAgent(name, "service", opts);
-	}
-	
-	async registerAgent(name, opts = {
-		description: undefined,
-		schema: undefined,
-		version: '',
-	}) {
-		return this.#registerServiceOrAgent(name, "agent", opts);
 	}
 	
 	#connect() {
@@ -250,12 +294,39 @@ class OrraSDK {
 	}
 }
 
-export function createClient(config = {
+export function createClient(opts = {
 	orraUrl: undefined,
-	orraKey: undefined
+	orraKey: undefined,
+	persistenceOpts: {},
 }) {
-	if (!config?.orraUrl || !config?.orraKey) {
+	if (!opts?.orraUrl || !opts?.orraKey) {
 		throw "Cannot create an SDK client: ensure both a valid Orra URL and Orra API Key have been provided.";
 	}
-	return new OrraSDK(config?.orraUrl, config?.orraKey);
+	return new OrraSDK(opts?.orraUrl, opts?.orraKey, opts?.persistenceOpts);
 }
+
+function extractDirectoryFromFilePath(filePath) {
+	return path.dirname(filePath);
+}
+
+async function createDirectoryIfNotExists(directoryPath) {
+	try {
+		await fs.access(directoryPath);
+		// If the above line doesn't throw an error, the directory exists
+		console.log(`Directory ${directoryPath} already exists.`);
+	} catch (error) {
+		if (error.code === 'ENOENT') {
+			// ENOENT means the directory doesn't exist
+			try {
+				await fs.mkdir(directoryPath, { recursive: true });
+				console.log(`Directory ${directoryPath} created successfully.`);
+			} catch (mkdirError) {
+				console.error(`Error creating directory ${directoryPath}:`, mkdirError);
+			}
+		} else {
+			// Some other error occurred
+			console.error(`Error checking directory ${directoryPath}:`, error);
+		}
+	}
+}
+
