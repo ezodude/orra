@@ -14,10 +14,17 @@ const (
 	TaskZero           = "task0"
 	ResultAggregatorID = "result_aggregator"
 	FailureTrackerID   = "failure_tracker"
+	WSPing             = "ping"
+	WSPong             = "pong"
 )
 
-var LogsRetentionPeriod = time.Hour * 24
-var dependencyPattern = regexp.MustCompile(`^\$([^.]+)\.`)
+var (
+	LogsRetentionPeriod       = time.Hour * 24
+	MaxQueueSize              = 1000
+	DependencyPattern         = regexp.MustCompile(`^\$([^.]+)\.`)
+	WSWriteTimeOut            = time.Second * 120
+	WSMaxMessageBytes   int64 = 10 * 1024 // 10K
+)
 
 type Config struct {
 	Port       int `envconfig:"default=8005"`
@@ -106,10 +113,3 @@ func (st *ServiceType) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
-
-type ServiceStatus int
-
-const (
-	Disconnected ServiceStatus = iota + 1
-	Connected
-)

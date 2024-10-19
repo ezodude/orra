@@ -1,13 +1,14 @@
 package main
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/olahol/melody"
 	"github.com/rs/zerolog"
 )
 
@@ -16,25 +17,44 @@ type ControlPlane struct {
 	services             map[string][]*ServiceInfo
 	orchestrationStore   map[string]*Orchestration
 	orchestrationStoreMu sync.RWMutex
-	wsConnections        map[string]*ServiceConnection
-	wsConnectionsMutex   sync.RWMutex
 	LogManager           *LogManager
 	logWorkers           map[string]map[string]context.CancelFunc
 	workerMu             sync.RWMutex
+	WebSocketManager     *WebSocketManager
 	openAIKey            string
 	Logger               zerolog.Logger
+}
+
+type WebSocketMessageQueue struct {
+	*list.List
+	mu sync.Mutex
+}
+
+type WebSocketQueuedMessage struct {
+	Message json.RawMessage
+	Time    time.Time
+}
+
+type WebSocketCallback func(json.RawMessage, error)
+
+type WebSocketManager struct {
+	melody            *melody.Melody
+	logger            zerolog.Logger
+	connMap           map[string]*melody.Session
+	connMu            sync.RWMutex
+	taskCallbacks     map[string]WebSocketCallback
+	callbacksMu       sync.RWMutex
+	messageQueues     map[string]*WebSocketMessageQueue
+	messageQueuesMu   sync.RWMutex
+	messageExpiration time.Duration
+	pingInterval      time.Duration
+	pongWait          time.Duration
 }
 
 type Project struct {
 	ID      string `json:"id"`
 	APIKey  string `json:"apiKey"`
 	Webhook string `json:"webhook"`
-}
-
-type ServiceConnection struct {
-	Status ServiceStatus
-	Conn   *websocket.Conn
-	mu     sync.Mutex
 }
 
 type OrchestrationState struct {
@@ -86,7 +106,7 @@ type LogState struct {
 
 type LogWorker interface {
 	Start(ctx context.Context, orchestrationID string)
-	PollLog(ctx context.Context, logStream *Log, entriesChan chan<- LogEntry)
+	PollLog(ctx context.Context, orchestrationID string, logStream *Log, entriesChan chan<- LogEntry)
 }
 
 type ResultAggregator struct {
@@ -114,6 +134,7 @@ type TaskWorker struct {
 type Task struct {
 	ID              string          `json:"id"`
 	Input           json.RawMessage `json:"input"`
+	ExecutionID     string          `json:"executionId"`
 	ServiceID       string          `json:"-"`
 	OrchestrationID string          `json:"-"`
 	ProjectID       string          `json:"-"`

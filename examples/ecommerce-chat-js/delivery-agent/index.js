@@ -8,12 +8,12 @@ dotenv.config();
 // Configuration from environment variables
 const sdkConfig = {
 	orraUrl: process.env.ORRA_URL,
-	orraKey: process.env.ORRA_KEY
+	orraKey: process.env.ORRA_API_KEY
 };
 
 // Validate environment variables
 if (!sdkConfig.orraUrl || !sdkConfig.orraKey) {
-	console.error('Error: ORRA_URL, ORRA_KEY and MISTRAL_API_KEY must be set in the environment variables');
+	console.error('Error: ORRA_URL, ORRA_API_KEY and MISTRAL_API_KEY must be set in the environment variables');
 	process.exit(1);
 }
 
@@ -68,13 +68,9 @@ async function handleTask(task) {
 		productAvailability,
 		warehouseAddress,
 	})
-	console.log('Task handled:', response)
+	console.log('Agent task response:', response)
 	
-	// Send the response back
-	const result = { response: response };
-	
-	console.log('Sending result:', result);
-	return result;
+	return { response: response };
 }
 
 // Main function to set up and run the service

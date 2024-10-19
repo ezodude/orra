@@ -7,12 +7,12 @@ dotenv.config();
 // Configuration from environment variables
 const config = {
 	orraUrl: process.env.ORRA_URL,
-	orraKey: process.env.ORRA_KEY
+	orraKey: process.env.ORRA_API_KEY
 };
 
 // Validate environment variables
 if (!config.orraUrl || !config.orraKey) {
-	console.error('Error: ORRA_URL and ORRA_KEY must be set in the environment variables');
+	console.error('Error: ORRA_URL and ORRA_API_KEY must be set in the environment variables');
 	process.exit(1);
 }
 
