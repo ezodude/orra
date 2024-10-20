@@ -10,13 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sashabaranov/go-openai"
 )
 
 func NewControlPlane(openAIKey string) *ControlPlane {
 	plane := &ControlPlane{
 		projects:           make(map[string]*Project),
-		services:           make(map[string][]*ServiceInfo),
+		services:           make(map[string]map[string]*ServiceInfo),
 		orchestrationStore: make(map[string]*Orchestration),
 		logWorkers:         make(map[string]map[string]context.CancelFunc),
 		openAIKey:          openAIKey,
@@ -39,14 +40,58 @@ func (p *ControlPlane) TidyWebSocketArtefacts(ctx context.Context) {
 	}()
 }
 
-func (p *ControlPlane) GetServiceName(projectID string, serviceID string) (string, error) {
-	serviceInfos := p.services[projectID]
-	for _, info := range serviceInfos {
-		if info.ID == serviceID {
-			return info.Name, nil
-		}
+func (p *ControlPlane) RegisterOrUpdateService(service *ServiceInfo) error {
+	p.servicesMu.Lock()
+	defer p.servicesMu.Unlock()
+
+	projectServices, exists := p.services[service.ProjectID]
+	if !exists {
+		p.Logger.Debug().
+			Str("ProjectID", service.ProjectID).
+			Str("ServiceName", service.Name).
+			Msgf("Creating new project service")
+		projectServices = make(map[string]*ServiceInfo)
+		p.services[service.ProjectID] = projectServices
 	}
-	return "", fmt.Errorf("service %s not found for project %s", serviceID, projectID)
+
+	if len(strings.TrimSpace(service.ID)) == 0 {
+		service.ID = p.generateServiceKey(service.ProjectID)
+		service.Version = 1
+
+		p.Logger.Debug().
+			Str("ProjectID", service.ProjectID).
+			Str("ServiceName", service.Name).
+			Msgf("Generating new service ID")
+	} else {
+		existingService, exists := projectServices[service.ID]
+		if !exists {
+			return fmt.Errorf("service with key %s not found in project %s", service.ID, service.ProjectID)
+		}
+		service.ID = existingService.ID
+		service.Version = existingService.Version + 1
+
+		p.Logger.Debug().
+			Str("ProjectID", service.ProjectID).
+			Str("ServiceID", service.ID).
+			Str("ServiceName", service.Name).
+			Int64("ServiceVersion", service.Version).
+			Msgf("Updating existing service")
+	}
+	projectServices[service.ID] = service
+
+	return nil
+}
+
+func (p *ControlPlane) GetServiceName(projectID string, serviceID string) (string, error) {
+	p.servicesMu.RLock()
+	defer p.servicesMu.RUnlock()
+
+	projectServices := p.services[projectID]
+	svc, exists := projectServices[serviceID]
+	if !exists {
+		return "", fmt.Errorf("service %s not found for project %s", serviceID, projectID)
+	}
+	return svc.Name, nil
 }
 
 func (p *ControlPlane) PrepareOrchestration(orchestration *Orchestration) {
@@ -192,20 +237,37 @@ func (p *ControlPlane) GetProjectByApiKey(key string) (*Project, error) {
 }
 
 func (p *ControlPlane) ServiceBelongsToProject(svcID, projectID string) bool {
-	for _, service := range p.services[projectID] {
-		if service.ID == svcID {
-			return true
-		}
+	p.servicesMu.RLock()
+	defer p.servicesMu.RUnlock()
+
+	projectServices, exists := p.services[projectID]
+	if !exists {
+		return false
 	}
-	return false
+	_, ok := projectServices[svcID]
+	return ok
+}
+
+func (p *ControlPlane) generateServiceKey(projectID string) string {
+	// Generate a unique key for the service
+	// This could be a UUID, a hash of project ID + timestamp, or any other method
+	// that ensures uniqueness within the project
+	return fmt.Sprintf("%s-%s", projectID, uuid.New().String())
 }
 
 func (p *ControlPlane) discoverProjectServices(projectID string) ([]*ServiceInfo, error) {
-	services, ok := p.services[projectID]
+	p.servicesMu.RLock()
+	defer p.servicesMu.RUnlock()
+
+	var out []*ServiceInfo
+	projectServices, ok := p.services[projectID]
 	if !ok {
 		return nil, fmt.Errorf("no services found for project %s", projectID)
 	}
-	return services, nil
+	for _, s := range projectServices {
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 func (p *ControlPlane) generateLLMPrompt(orchestration *Orchestration, services []*ServiceInfo) (string, error) {

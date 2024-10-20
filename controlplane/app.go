@@ -151,12 +151,13 @@ func (app *App) RegisterServiceOrAgent(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	service.ID = uuid.New().String()
 	service.ProjectID = project.ID
 	service.Type = serviceType
 
-	// need a better to add services that avoid duplicating service registration
-	app.Plane.services[project.ID] = append(app.Plane.services[project.ID], &service)
+	if err := app.Plane.RegisterOrUpdateService(&service); err != nil {
+		errs.HTTPErrorResponse(w, app.Logger, errs.E(errs.Unanticipated, err))
+		return
+	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
 		"id":     service.ID,
