@@ -53,15 +53,20 @@ class OrraSDK {
 	async loadServiceKey() {
 		try {
 			if (this.persistenceOpts.method === 'file') {
-				const data = await fs.readFile(this.persistenceOpts.filePath, 'utf8');
+				
+				const filePath = this.persistenceOpts.filePath;
+				const directoryPath = extractDirectoryFromFilePath(filePath);
+				const exists = await directoryExists(directoryPath);
+				if (!exists) return;
+				
+				const data = await fs.readFile(filePath, 'utf8');
 				const parsed = JSON.parse(data);
 				this.serviceId = parsed.serviceId;
 			} else if (this.persistenceOpts.method === 'custom' && typeof this.persistenceOpts.customLoad === 'function') {
 				this.serviceId = await this.persistenceOpts.customLoad();
 			}
 		} catch (error) {
-			console.warn('Failed to load service key:', error);
-			// If loading fails, we'll keep the serviceKey as null and get a new one upon registration
+			// If loading fails, we'll keep the serviceId as null and get a new one upon registration
 		}
 	}
 	
@@ -309,24 +314,31 @@ function extractDirectoryFromFilePath(filePath) {
 	return path.dirname(filePath);
 }
 
-async function createDirectoryIfNotExists(directoryPath) {
+async function directoryExists(dirPath) {
 	try {
-		await fs.access(directoryPath);
-		// If the above line doesn't throw an error, the directory exists
-		console.log(`Directory ${directoryPath} already exists.`);
+		await fs.access(dirPath, fs.constants.F_OK);
+		return true;
 	} catch (error) {
 		if (error.code === 'ENOENT') {
-			// ENOENT means the directory doesn't exist
-			try {
-				await fs.mkdir(directoryPath, { recursive: true });
-				console.log(`Directory ${directoryPath} created successfully.`);
-			} catch (mkdirError) {
-				console.error(`Error creating directory ${directoryPath}:`, mkdirError);
-			}
-		} else {
-			// Some other error occurred
-			console.error(`Error checking directory ${directoryPath}:`, error);
+			return false;
 		}
+		throw error; // Re-throw any other errors
 	}
 }
 
+async function createDirectoryIfNotExists(directoryPath) {
+	let exists = false
+	try {
+		exists = await directoryExists(directoryPath)
+		if (exists) return
+		
+		try {
+			await fs.mkdir(directoryPath, { recursive: true });
+			console.log(`Directory ${directoryPath} created successfully.`);
+		} catch (mkdirError) {
+			console.error(`Error creating directory ${directoryPath}:`, mkdirError);
+		}
+	}catch (e) {
+		console.error(`Error creating directory ${directoryPath}:`, e);
+	}
+}
