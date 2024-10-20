@@ -81,7 +81,7 @@ func (wsm *WebSocketManager) HandleDisconnection(serviceID string) {
 	delete(wsm.connMap, serviceID)
 	wsm.connMu.Unlock()
 
-	wsm.logger.Info().Str("serviceID", serviceID).Msg("WebSocket connection closed")
+	wsm.logger.Info().Str("ServiceID", serviceID).Msg("WebSocket connection closed")
 }
 
 func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
@@ -244,12 +244,27 @@ func (wsm *WebSocketManager) pingRoutine(s *melody.Session) {
 	defer ticker.Stop()
 
 	for {
+		serviceID, _ := s.Get("serviceID")
+
 		<-ticker.C
+		if s.IsClosed() {
+			wsm.logger.Info().
+				Str("ServiceID", serviceID.(string)).
+				Msg("PING/PONG no longer required for old connection")
+			return
+		}
 		if err := s.Write([]byte(WSPing)); err != nil {
-			wsm.logger.Warn().Err(err).Msg("Failed to send ping, closing connection")
+			wsm.logger.Warn().
+				Str("ServiceID", serviceID.(string)).
+				Err(err).
+				Msg("Failed to send ping, closing connection")
+
 			err := s.Close()
 			if err != nil {
-				wsm.logger.Warn().Err(err).Msg("Failed to close connection")
+				wsm.logger.Warn().
+					Str("ServiceID", serviceID.(string)).
+					Err(err).
+					Msg("Failed to close connection")
 				return
 			}
 			return
@@ -257,20 +272,28 @@ func (wsm *WebSocketManager) pingRoutine(s *melody.Session) {
 
 		lastPong, ok := s.Get("lastPong")
 		if !ok {
-			wsm.logger.Warn().Msg("Missing Pong, closing connection")
+			wsm.logger.Warn().
+				Str("ServiceID", serviceID.(string)).
+				Msg("Missing Pong, closing connection")
 			err := s.Close()
 			if err != nil {
-				wsm.logger.Warn().Err(err).Msg("Failed to close connection")
+				wsm.logger.Warn().
+					Str("ServiceID", serviceID.(string)).
+					Err(err).Msg("Failed to close connection")
 				return
 			}
 			return
 		}
 
 		if time.Since(lastPong.(time.Time)) > wsm.pongWait {
-			wsm.logger.Warn().Msg("Pong timeout, closing connection")
+			wsm.logger.Warn().
+				Str("ServiceID", serviceID.(string)).
+				Msg("Pong timeout, closing connection")
 			err := s.Close()
 			if err != nil {
-				wsm.logger.Warn().Err(err).Msg("Failed to close connection")
+				wsm.logger.Warn().
+					Str("ServiceID", serviceID.(string)).
+					Err(err).Msg("Failed to close connection")
 				return
 			}
 			return
