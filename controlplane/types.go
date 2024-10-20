@@ -94,6 +94,7 @@ type Log struct {
 	Entries       []LogEntry
 	CurrentOffset uint64
 	mu            sync.RWMutex
+	seenEntries   map[string]bool
 	lastAccessed  time.Time // For cleanup
 }
 

@@ -56,14 +56,11 @@ func (lm *LogManager) GetLog(orchestrationID string) *Log {
 	return lm.logs[orchestrationID]
 }
 
-func (lm *LogManager) CreateLog(orchestrationID string, plan *ServiceCallingPlan) *Log {
+func (lm *LogManager) PrepLogForOrchestration(orchestrationID string, plan *ServiceCallingPlan) *Log {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
-	log := &Log{
-		Entries:      make([]LogEntry, 0),
-		lastAccessed: time.Now().UTC(),
-	}
+	log := NewLog()
 
 	state := &OrchestrationState{
 		ID:             orchestrationID,
@@ -163,14 +160,27 @@ func (lm *LogManager) FinalizeOrchestration(orchestrationID string, status Statu
 	return nil
 }
 
+func NewLog() *Log {
+	return &Log{
+		Entries:     make([]LogEntry, 0),
+		seenEntries: make(map[string]bool),
+	}
+}
+
+// Append ensures all appends are idempotent
 func (l *Log) Append(entry LogEntry) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	if l.seenEntries[entry.ID()] {
+		return nil
+	}
 
 	entry.offset = l.CurrentOffset
 	l.Entries = append(l.Entries, entry)
 	l.CurrentOffset += 1
 	l.lastAccessed = time.Now().UTC()
+	l.seenEntries[entry.ID()] = true
 
 	return nil
 }
@@ -184,12 +194,6 @@ func (l *Log) ReadFrom(offset uint64) []LogEntry {
 	}
 
 	return append([]LogEntry(nil), l.Entries[offset:]...)
-}
-
-func (l *Log) GetCurrentOffset() uint64 {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.CurrentOffset
 }
 
 func NewLogEntry(entryType, id string, value json.RawMessage, producerID string, attemptNum int) LogEntry {
