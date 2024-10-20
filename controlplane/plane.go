@@ -177,12 +177,7 @@ func (p *ControlPlane) ExecuteOrchestration(orchestration *Orchestration) {
 	p.Logger.Debug().Msgf("About to create and start workers for orchestration %s", orchestration.ID)
 	p.createAndStartWorkers(orchestration.ID, orchestration.Plan)
 
-	initialEntry := LogEntry{
-		Type:       "task_output",
-		ID:         TaskZero,
-		Value:      orchestration.taskZero,
-		ProducerID: "control-panel",
-	}
+	initialEntry := NewLogEntry("task_output", TaskZero, orchestration.taskZero, "control-panel", 0)
 
 	p.Logger.Debug().Msgf("About to append initial entry to Log for orchestration %s", orchestration.ID)
 	if err := log.Append(initialEntry); err != nil {
@@ -508,8 +503,8 @@ func (p *ControlPlane) cleanupLogWorkers(orchestrationID string) {
 	p.workerMu.Lock()
 	defer p.workerMu.Unlock()
 
-	if cancelFuncs, exists := p.logWorkers[orchestrationID]; exists {
-		for logWorker, cancel := range cancelFuncs {
+	if cancelFns, exists := p.logWorkers[orchestrationID]; exists {
+		for logWorker, cancel := range cancelFns {
 			p.Logger.Debug().
 				Str("LogWorker", logWorker).
 				Msgf("Stopping Log worker for orchestration: %s", orchestrationID)

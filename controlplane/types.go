@@ -70,13 +70,13 @@ type OrchestrationState struct {
 }
 
 type LogEntry struct {
-	Offset     uint64          `json:"offset"`
-	Type       string          `json:"type"`
-	ID         string          `json:"id"`
-	Value      json.RawMessage `json:"value"`
-	Timestamp  time.Time       `json:"timestamp"`
-	ProducerID string          `json:"producer_id"`
-	AttemptNum int             `json:"attempt_num"`
+	offset     uint64
+	entryType  string
+	id         string
+	value      json.RawMessage
+	timestamp  time.Time
+	producerID string
+	attemptNum int
 }
 
 type LogManager struct {

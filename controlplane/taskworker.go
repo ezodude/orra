@@ -85,7 +85,7 @@ func (w *TaskWorker) PollLog(ctx context.Context, orchestrationID string, logStr
 				processableEntries = append(processableEntries, entry)
 				select {
 				case entriesChan <- entry:
-					w.logState.LastOffset = entry.Offset + 1
+					w.logState.LastOffset = entry.Offset() + 1
 				case <-ctx.Done():
 					return
 				}
@@ -101,14 +101,14 @@ func (w *TaskWorker) PollLog(ctx context.Context, orchestrationID string, logStr
 }
 
 func (w *TaskWorker) shouldProcess(entry LogEntry) bool {
-	_, isDependency := w.Dependencies[entry.ID]
-	processed := w.logState.Processed[entry.ID]
-	return entry.Type == "task_output" && isDependency && !processed
+	_, isDependency := w.Dependencies[entry.ID()]
+	processed := w.logState.Processed[entry.ID()]
+	return entry.Type() == "task_output" && isDependency && !processed
 }
 
 func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestrationID string) error {
 	// Store the entry's output in our dependency state
-	w.logState.DependencyState[entry.ID] = entry.Value
+	w.logState.DependencyState[entry.ID()] = entry.Value()
 
 	if !containsAll(w.logState.DependencyState, w.Dependencies) {
 		return nil
@@ -122,21 +122,15 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 	}
 
 	// Mark this entry as processed
-	w.logState.Processed[entry.ID] = true
+	w.logState.Processed[entry.ID()] = true
 
-	if _, err := w.LogManager.MarkTaskCompleted(orchestrationID, entry.ID); err != nil {
+	if _, err := w.LogManager.MarkTaskCompleted(orchestrationID, entry.ID()); err != nil {
 		w.LogManager.Logger.Error().Err(err).Msgf("Cannot mark task %s completed for orchestration %s", w.TaskID, orchestrationID)
 		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.ServiceID, err.Error())
 	}
 
 	// Create a new log entry for our task's output
-	newEntry := LogEntry{
-		Type:       "task_output",
-		ID:         w.TaskID,
-		Value:      output,
-		ProducerID: w.ServiceID,
-		Timestamp:  time.Now(),
-	}
+	newEntry := NewLogEntry("task_output", w.TaskID, output, w.ServiceID, 0)
 
 	// Append our output to the log
 	if err := w.LogManager.GetLog(orchestrationID).Append(newEntry); err != nil {

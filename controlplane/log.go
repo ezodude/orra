@@ -39,7 +39,7 @@ func (lm *LogManager) startCleanup(ctx context.Context) {
 func (lm *LogManager) cleanupStaleOrchestrations() {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
-	now := time.Now()
+	now := time.Now().UTC()
 
 	for id, orchestrationState := range lm.orchestrations {
 		if orchestrationState.Status == Completed &&
@@ -62,7 +62,7 @@ func (lm *LogManager) CreateLog(orchestrationID string, plan *ServiceCallingPlan
 
 	log := &Log{
 		Entries:      make([]LogEntry, 0),
-		lastAccessed: time.Now(),
+		lastAccessed: time.Now().UTC(),
 	}
 
 	state := &OrchestrationState{
@@ -70,7 +70,7 @@ func (lm *LogManager) CreateLog(orchestrationID string, plan *ServiceCallingPlan
 		Plan:           plan,
 		CompletedTasks: make(map[string]bool),
 		Status:         Processing,
-		CreatedAt:      time.Now(),
+		CreatedAt:      time.Now().UTC(),
 	}
 
 	lm.logs[orchestrationID] = log
@@ -90,7 +90,7 @@ func (lm *LogManager) MarkTaskCompleted(orchestrationID, taskID string) (Status,
 		return state.Status, fmt.Errorf("orchestration %s has no associated state", orchestrationID)
 	}
 	state.CompletedTasks[taskID] = true
-	state.UpdatedAt = time.Now()
+	state.UpdatedAt = time.Now().UTC()
 
 	return state.Status, nil
 }
@@ -105,7 +105,7 @@ func (lm *LogManager) MarkOrchestrationCompleted(orchestrationID string) (Status
 	}
 
 	state.Status = Completed
-	state.UpdatedAt = time.Now()
+	state.UpdatedAt = time.Now().UTC()
 
 	return state.Status, nil
 }
@@ -121,7 +121,7 @@ func (lm *LogManager) MarkOrchestrationFailed(orchestrationID string, reason jso
 
 	state.Error = string(reason)
 	state.Status = Failed
-	state.UpdatedAt = time.Now()
+	state.UpdatedAt = time.Now().UTC()
 
 	return state.Status, nil
 }
@@ -137,14 +137,9 @@ func (lm *LogManager) AppendFailureToLog(orchestrationID, id, producerID, reason
 	if err != nil {
 		return fmt.Errorf("failed to marshal reason for log entry: %w", err)
 	}
+
 	// Create a new log entry for our task's output
-	newEntry := LogEntry{
-		Type:       "task_failure",
-		ID:         id,
-		Value:      reasonData,
-		ProducerID: producerID,
-		Timestamp:  time.Now(),
-	}
+	newEntry := NewLogEntry("task_failure", id, reasonData, producerID, 0)
 
 	// Append our output to the log
 	if err := lm.GetLog(orchestrationID).Append(newEntry); err != nil {
@@ -172,12 +167,10 @@ func (l *Log) Append(entry LogEntry) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	entry.Offset = l.CurrentOffset
-	entry.Timestamp = time.Now()
-
+	entry.offset = l.CurrentOffset
 	l.Entries = append(l.Entries, entry)
 	l.CurrentOffset += 1
-	l.lastAccessed = time.Now()
+	l.lastAccessed = time.Now().UTC()
 
 	return nil
 }
@@ -190,13 +183,52 @@ func (l *Log) ReadFrom(offset uint64) []LogEntry {
 		return nil
 	}
 
-	return l.Entries[offset:]
+	return append([]LogEntry(nil), l.Entries[offset:]...)
 }
 
 func (l *Log) GetCurrentOffset() uint64 {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.CurrentOffset
+}
+
+func NewLogEntry(entryType, id string, value json.RawMessage, producerID string, attemptNum int) LogEntry {
+	return LogEntry{
+		entryType:  entryType,
+		id:         id,
+		value:      append(json.RawMessage(nil), value...), // Deep copy
+		timestamp:  time.Now().UTC(),
+		producerID: producerID,
+		attemptNum: attemptNum,
+	}
+}
+
+func (e LogEntry) Offset() uint64         { return e.offset }
+func (e LogEntry) Type() string           { return e.entryType }
+func (e LogEntry) ID() string             { return e.id }
+func (e LogEntry) Value() json.RawMessage { return append(json.RawMessage(nil), e.value...) }
+func (e LogEntry) Timestamp() time.Time   { return e.timestamp }
+func (e LogEntry) ProducerID() string     { return e.producerID }
+func (e LogEntry) AttemptNum() int        { return e.attemptNum }
+
+func (e LogEntry) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Offset     uint64          `json:"offset"`
+		Type       string          `json:"type"`
+		ID         string          `json:"id"`
+		Value      json.RawMessage `json:"value"`
+		Timestamp  time.Time       `json:"timestamp"`
+		ProducerID string          `json:"producerId"`
+		AttemptNum int             `json:"attemptNum"`
+	}{
+		Offset:     e.offset,
+		Type:       e.entryType,
+		ID:         e.id,
+		Value:      e.value,
+		Timestamp:  e.timestamp,
+		ProducerID: e.producerID,
+		AttemptNum: e.attemptNum,
+	})
 }
 
 func (d DependencyState) SortedValues() []json.RawMessage {

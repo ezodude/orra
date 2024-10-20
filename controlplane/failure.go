@@ -68,7 +68,7 @@ func (f *FailureTracker) PollLog(ctx context.Context, orchestrationID string, lo
 				processableEntries = append(processableEntries, entry)
 				select {
 				case entriesChan <- entry:
-					f.logState.LastOffset = entry.Offset + 1
+					f.logState.LastOffset = entry.Offset() + 1
 				case <-ctx.Done():
 					return
 				}
@@ -84,12 +84,12 @@ func (f *FailureTracker) PollLog(ctx context.Context, orchestrationID string, lo
 }
 
 func (f *FailureTracker) shouldProcess(entry LogEntry) bool {
-	return entry.Type == "task_failure"
+	return entry.Type() == "task_failure"
 }
 
 func (f *FailureTracker) processEntry(entry LogEntry, orchestrationID string) error {
 	// Mark this entry as processed
-	f.logState.Processed[entry.ID] = true
+	f.logState.Processed[entry.ID()] = true
 
 	var errorPayload = struct {
 		Id              string          `json:"id"`
@@ -97,10 +97,10 @@ func (f *FailureTracker) processEntry(entry LogEntry, orchestrationID string) er
 		OrchestrationID string          `json:"orchestration"`
 		Error           json.RawMessage `json:"error"`
 	}{
-		Id:              entry.ID,
-		ProducerID:      entry.ProducerID,
+		Id:              entry.ID(),
+		ProducerID:      entry.ProducerID(),
 		OrchestrationID: orchestrationID,
-		Error:           entry.Value,
+		Error:           entry.Value(),
 	}
 
 	reason, err := json.Marshal(errorPayload)

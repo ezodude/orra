@@ -30,7 +30,7 @@ func NewWebSocketManager(logger zerolog.Logger) *WebSocketManager {
 
 func (wsm *WebSocketManager) HandleConnection(serviceID string, serviceName string, s *melody.Session) {
 	s.Set("serviceID", serviceID)
-	s.Set("lastPong", time.Now())
+	s.Set("lastPong", time.Now().UTC())
 
 	wsm.connMu.Lock()
 	wsm.connMap[serviceID] = s
@@ -115,7 +115,7 @@ func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
 
 	switch messagePayload.Type {
 	case WSPong:
-		s.Set("lastPong", time.Now())
+		s.Set("lastPong", time.Now().UTC())
 	case "task_result":
 		wsm.handleTaskResult(messagePayload)
 	default:
@@ -224,7 +224,7 @@ func (wsm *WebSocketManager) QueueMessage(serviceID string, message []byte) {
 		wsm.logger.Warn().Str("serviceID", serviceID).Msg("Message queue full, dropping oldest message")
 		queue.Remove(queue.Front())
 	}
-	queue.PushBack(&WebSocketQueuedMessage{Message: message, Time: time.Now()})
+	queue.PushBack(&WebSocketQueuedMessage{Message: message, Time: time.Now().UTC()})
 }
 
 func (wsm *WebSocketManager) RegisterTaskCallback(executionID string, callback WebSocketCallback) {
