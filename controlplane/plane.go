@@ -83,13 +83,15 @@ func (p *ControlPlane) RegisterOrUpdateService(service *ServiceInfo) error {
 }
 
 func (p *ControlPlane) GetServiceName(projectID string, serviceID string) (string, error) {
-	serviceInfos := p.services[projectID]
-	for _, info := range serviceInfos {
-		if info.ID == serviceID {
-			return info.Name, nil
-		}
+	p.servicesMu.RLock()
+	defer p.servicesMu.RUnlock()
+
+	projectServices := p.services[projectID]
+	svc, exists := projectServices[serviceID]
+	if !exists {
+		return "", fmt.Errorf("service %s not found for project %s", serviceID, projectID)
 	}
-	return "", fmt.Errorf("service %s not found for project %s", serviceID, projectID)
+	return svc.Name, nil
 }
 
 func (p *ControlPlane) PrepareOrchestration(orchestration *Orchestration) {
@@ -235,12 +237,15 @@ func (p *ControlPlane) GetProjectByApiKey(key string) (*Project, error) {
 }
 
 func (p *ControlPlane) ServiceBelongsToProject(svcID, projectID string) bool {
-	for _, service := range p.services[projectID] {
-		if service.ID == svcID {
-			return true
-		}
+	p.servicesMu.RLock()
+	defer p.servicesMu.RUnlock()
+
+	projectServices, exists := p.services[projectID]
+	if !exists {
+		return false
 	}
-	return false
+	_, ok := projectServices[svcID]
+	return ok
 }
 
 func (p *ControlPlane) generateServiceKey(projectID string) string {
@@ -255,11 +260,11 @@ func (p *ControlPlane) discoverProjectServices(projectID string) ([]*ServiceInfo
 	defer p.servicesMu.RUnlock()
 
 	var out []*ServiceInfo
-	servicesByKey, ok := p.services[projectID]
+	projectServices, ok := p.services[projectID]
 	if !ok {
 		return nil, fmt.Errorf("no services found for project %s", projectID)
 	}
-	for _, s := range servicesByKey {
+	for _, s := range projectServices {
 		out = append(out, s)
 	}
 	return out, nil
