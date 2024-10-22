@@ -4,21 +4,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
-	"math/rand"
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
 )
 
 var (
-	maxRetries = 5
-	baseDelay  = 5 * time.Second
-	maxDelay   = 60 * time.Second
+	maxRetries               = 5
+	maxExecutionTimeOutDelay = 60 * time.Second
 )
 
+type RetryableError struct {
+	Err error
+}
+
+func (e RetryableError) Error() string {
+	return fmt.Sprintf("retryable error: %v", e.Err)
+}
+
 func NewTaskWorker(serviceID string, taskID string, dependencies DependencyKeys, logManager *LogManager) LogWorker {
+	expBackoff := backoff.NewExponentialBackOff()
+	expBackoff.MaxElapsedTime = 10 * time.Minute
+
 	return &TaskWorker{
 		ServiceID:    serviceID,
 		TaskID:       taskID,
@@ -29,6 +38,7 @@ func NewTaskWorker(serviceID string, taskID string, dependencies DependencyKeys,
 			Processed:       make(map[string]bool),
 			DependencyState: make(map[string]json.RawMessage),
 		},
+		backOff: expBackoff,
 	}
 }
 
@@ -124,7 +134,7 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 	// Mark this entry as processed
 	w.logState.Processed[entry.ID()] = true
 
-	if _, err := w.LogManager.MarkTaskCompleted(orchestrationID, entry.ID()); err != nil {
+	if err := w.LogManager.MarkTaskCompleted(orchestrationID, entry.ID()); err != nil {
 		w.LogManager.Logger.Error().Err(err).Msgf("Cannot mark task %s completed for orchestration %s", w.TaskID, orchestrationID)
 		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.ServiceID, err.Error())
 	}
@@ -147,34 +157,59 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 
 func (w *TaskWorker) executeTaskWithRetry(ctx context.Context, orchestrationID string) (json.RawMessage, error) {
 	var result json.RawMessage
-	var err error
+	var consecutiveFailures int
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	operation := func() error {
+		paused, err := w.LogManager.IsTaskPaused(orchestrationID, w.TaskID)
+		if err != nil {
+			return backoff.Permanent(fmt.Errorf("failed to get orchestration status: %v", err))
+		}
+
+		if paused {
+			return backoff.Permanent(fmt.Errorf("task is paused"))
+		}
+
+		//if !w.LogManager.controlPlane.WebSocketManager.IsServiceHealthy(w.ServiceID) {
+		//	return RetryableError{Err: fmt.Errorf("service is unhealthy")}
+		//}
+
 		result, err = w.executeTask(ctx, orchestrationID)
-		if err == nil {
-			return result, nil
+		if err != nil {
+			consecutiveFailures++
+			if consecutiveFailures > maxRetries {
+				return backoff.Permanent(fmt.Errorf("too many consecutive failures: %w", err))
+			}
+			if isRetryableError(err) {
+				return RetryableError{Err: err}
+			}
+			return backoff.Permanent(err)
 		}
 
-		if !isRetryableError(err) {
-			return nil, err
-		}
-
-		delay := calculateBackoff(attempt)
-		w.LogManager.Logger.Info().
-			Str("taskID", w.TaskID).
-			Int("attempt", attempt+1).
-			Dur("delay", delay).
-			Msg("Task execution failed, retrying")
-
-		select {
-		case <-time.After(delay):
-			// Continue to next iteration
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
+		consecutiveFailures = 0
+		return nil
 	}
 
-	return nil, fmt.Errorf("max retries reached, last error: %w", err)
+	err := backoff.RetryNotify(operation, w.backOff, func(err error, duration time.Duration) {
+		if retryErr, ok := err.(RetryableError); ok {
+			w.LogManager.Logger.Info().
+				Str("OrchestrationID", orchestrationID).
+				Str("TaskID", w.TaskID).
+				Err(retryErr.Err).
+				Dur("RetryAfter", duration).
+				Msg("Retrying task due to retryable error")
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	successEntry := NewLogEntry("task_output", w.TaskID, result, w.ServiceID, 0)
+	if err := w.LogManager.GetLog(orchestrationID).Append(successEntry); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (json.RawMessage, error) {
@@ -229,43 +264,10 @@ func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (j
 		return nil, err
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(maxDelay * time.Second):
+	case <-time.After(maxExecutionTimeOutDelay * time.Second):
 		w.LogManager.controlPlane.WebSocketManager.UnregisterTaskCallback(executionID)
 		return nil, fmt.Errorf("task execution timed out")
 	}
-}
-
-func (w *TaskWorker) saveState(orchestrationID string) {
-	w.stateMu.Lock()
-	defer w.stateMu.Unlock()
-
-	stateKey := fmt.Sprintf("worker_state_%s_%s", orchestrationID, w.ServiceID)
-	_, err := json.Marshal(w.logState)
-	if err != nil {
-		w.LogManager.Logger.Error().Msgf("Failed to marshal worker state: %v", err)
-		return
-	}
-
-	// Here you would typically save this to a persistent store
-	// For this example, we'll just log it
-	w.LogManager.Logger.Debug().Msgf("Saved worker state: %s", stateKey)
-}
-
-func (w *TaskWorker) loadState(orchestrationID string) {
-	w.stateMu.Lock()
-	defer w.stateMu.Unlock()
-
-	stateKey := fmt.Sprintf("worker_state_%s_%s", orchestrationID, w.ServiceID)
-
-	// Here you would typically load this from a persistent store
-	// For this example, we'll just log it
-	w.LogManager.Logger.Debug().Msgf("Loaded worker state: %s", stateKey)
-
-	// If you had actual state data, you would unmarshal it like this:
-	// err := json.Unmarshal(stateData, &w.workerState)
-	// if err != nil {
-	//     log.Printf("Failed to unmarshal worker state: %v", err)
-	// }
 }
 
 func mergeValueMapsToJson(src map[string]json.RawMessage) (json.RawMessage, error) {
@@ -285,18 +287,6 @@ func containsAll(s map[string]json.RawMessage, e map[string]struct{}) bool {
 		}
 	}
 	return true
-}
-
-func calculateBackoff(attempt int) time.Duration {
-	delay := float64(baseDelay) * math.Pow(2, float64(attempt))
-	jitter := rand.Float64() * float64(time.Second)
-	delay += jitter
-
-	if delay > float64(maxDelay) {
-		delay = float64(maxDelay)
-	}
-
-	return time.Duration(delay)
 }
 
 func isRetryableError(err error) bool {

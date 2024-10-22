@@ -25,6 +25,7 @@ func NewWebSocketManager(logger zerolog.Logger) *WebSocketManager {
 		messageExpiration: time.Hour * 24, // Keep messages for 24 hours
 		pingInterval:      m.Config.PingPeriod,
 		pongWait:          m.Config.PongWait,
+		serviceHealth:     make(map[string]bool),
 	}
 }
 
@@ -248,57 +249,62 @@ func (wsm *WebSocketManager) pingRoutine(s *melody.Session) {
 
 		<-ticker.C
 		if s.IsClosed() {
+			wsm.UpdateServiceHealth(serviceID.(string), false)
+
 			wsm.logger.Info().
 				Str("ServiceID", serviceID.(string)).
-				Msg("PING/PONG no longer required for old connection")
+				Msg("PING/PONG no longer required for closed connection")
+
 			return
 		}
+
 		if err := s.Write([]byte(WSPing)); err != nil {
 			wsm.logger.Warn().
 				Str("ServiceID", serviceID.(string)).
 				Err(err).
 				Msg("Failed to send ping, closing connection")
 
-			err := s.Close()
-			if err != nil {
-				wsm.logger.Warn().
-					Str("ServiceID", serviceID.(string)).
-					Err(err).
-					Msg("Failed to close connection")
+			wsm.UpdateServiceHealth(serviceID.(string), false)
+
+			if err := s.Close(); err != nil {
 				return
 			}
 			return
 		}
 
+		// Check for pong response
 		lastPong, ok := s.Get("lastPong")
-		if !ok {
-			wsm.logger.Warn().
-				Str("ServiceID", serviceID.(string)).
-				Msg("Missing Pong, closing connection")
-			err := s.Close()
-			if err != nil {
-				wsm.logger.Warn().
-					Str("ServiceID", serviceID.(string)).
-					Err(err).Msg("Failed to close connection")
-				return
-			}
-			return
-		}
-
-		if time.Since(lastPong.(time.Time)) > wsm.pongWait {
+		if !ok || time.Since(lastPong.(time.Time)) > wsm.pongWait {
 			wsm.logger.Warn().
 				Str("ServiceID", serviceID.(string)).
 				Msg("Pong timeout, closing connection")
-			err := s.Close()
-			if err != nil {
-				wsm.logger.Warn().
-					Str("ServiceID", serviceID.(string)).
-					Err(err).Msg("Failed to close connection")
+
+			wsm.UpdateServiceHealth(serviceID.(string), false)
+
+			if err := s.Close(); err != nil {
 				return
 			}
+
 			return
 		}
+		wsm.UpdateServiceHealth(serviceID.(string), true)
 	}
+}
+
+func (wsm *WebSocketManager) RegisterHealthCallback(callback ServiceHealthCallback) {
+	wsm.healthCallbackMu.Lock()
+	defer wsm.healthCallbackMu.Unlock()
+	wsm.healthCallback = callback
+}
+
+func (wsm *WebSocketManager) UpdateServiceHealth(serviceID string, isHealthy bool) {
+	wsm.healthMu.Lock()
+	wsm.serviceHealth[serviceID] = isHealthy
+	wsm.healthMu.Unlock()
+
+	wsm.healthCallbackMu.RLock()
+	wsm.healthCallback(serviceID, isHealthy)
+	wsm.healthCallbackMu.RUnlock()
 }
 
 // CleanupExpiredMessages cleans up expired messages

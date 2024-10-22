@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -23,6 +24,87 @@ func NewControlPlane(openAIKey string) *ControlPlane {
 		openAIKey:          openAIKey,
 	}
 	return plane
+}
+
+func (p *ControlPlane) Initialise(ctx context.Context, logMgr *LogManager, wsManager *WebSocketManager, Logger zerolog.Logger) {
+	p.LogManager = logMgr
+	p.Logger = Logger
+	p.WebSocketManager = wsManager
+	p.WebSocketManager.RegisterHealthCallback(p.handleServiceHealthChange)
+	p.TidyWebSocketArtefacts(ctx)
+}
+
+func (p *ControlPlane) handleServiceHealthChange(serviceID string, isHealthy bool) {
+	orchestrationsAndTasks := p.GetActiveOrchestrationsAndTasksForService(serviceID)
+	if !isHealthy {
+		p.LogManager.UpdateActiveOrchestrations(orchestrationsAndTasks, serviceID, "service_unhealthy", Processing, Paused)
+		return
+	}
+
+	p.LogManager.UpdateActiveOrchestrations(orchestrationsAndTasks, serviceID, "service_healthy", Paused, Processing)
+	p.restartOrchestrationTasks(orchestrationsAndTasks)
+}
+
+func (p *ControlPlane) GetActiveOrchestrationsAndTasksForService(serviceID string) map[string]map[string]SubTask {
+	out := map[string]map[string]SubTask{}
+	var projectsForService []string
+
+	p.servicesMu.RLock()
+	for projectId, pServices := range p.services {
+		for svcId := range pServices {
+			if svcId == serviceID {
+				projectsForService = append(projectsForService, projectId)
+			}
+		}
+	}
+	p.servicesMu.RUnlock()
+
+	p.orchestrationStoreMu.RLock()
+	for _, projectId := range projectsForService {
+		for _, orchestration := range p.orchestrationStore {
+			if orchestration.IsActive() && projectId == orchestration.ProjectID {
+				out[orchestration.ID] = orchestration.GetSubTasksFor(serviceID)
+			}
+		}
+	}
+	p.orchestrationStoreMu.RUnlock()
+	return out
+}
+
+func (p *ControlPlane) restartOrchestrationTasks(orchestrationsAndTasks map[string]map[string]SubTask) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for orchestrationID, tasks := range orchestrationsAndTasks {
+		for _, task := range tasks {
+			completed, err := p.LogManager.IsTaskCompleted(orchestrationID, task.ID)
+			if err != nil {
+				p.Logger.Error().
+					Err(err).
+					Str("orchestrationID", orchestrationID).
+					Str("taskID", task.ID).
+					Msg("failed to check if task is completed during restart - continuing")
+			}
+
+			if !completed {
+				p.restartTask(orchestrationID, task)
+			}
+		}
+	}
+}
+
+func (p *ControlPlane) restartTask(orchestrationID string, task SubTask) {
+	if _, oExists := p.logWorkers[orchestrationID]; oExists {
+		if cancel, cExists := p.logWorkers[orchestrationID][task.ID]; cExists {
+			cancel()
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p.logWorkers[orchestrationID][task.ID] = cancel
+
+	worker := NewTaskWorker(task.Service, task.ID, task.extractDependencies(), p.LogManager)
+	go worker.Start(ctx, orchestrationID)
 }
 
 func (p *ControlPlane) TidyWebSocketArtefacts(ctx context.Context) {
@@ -123,10 +205,10 @@ func (p *ControlPlane) PrepareOrchestration(orchestration *Orchestration) {
 		return
 	}
 
-	if p.cannotExecuteAction(callingPlan.Tasks) {
+	if err := p.validateActionable(callingPlan.Tasks); err != nil {
 		orchestration.Plan = callingPlan
 		orchestration.Status = NotActionable
-		marshaledErr, _ := json.Marshal(callingPlan.Tasks[0].Input["error"])
+		marshaledErr, _ := json.Marshal(err.Error())
 		orchestration.Error = marshaledErr
 		return
 	}
@@ -537,8 +619,13 @@ func (p *ControlPlane) callingPlanMinusTaskZero(callingPlan *ServiceCallingPlan)
 	}
 }
 
-func (p *ControlPlane) cannotExecuteAction(subTasks []*SubTask) bool {
-	return len(subTasks) == 1 && strings.EqualFold(subTasks[0].ID, "final")
+func (p *ControlPlane) validateActionable(subTasks []*SubTask) error {
+	for _, subTask := range subTasks {
+		if strings.EqualFold(subTask.ID, "final") {
+			return fmt.Errorf("%s", subTask.Error)
+		}
+	}
+	return nil
 }
 
 func (p *ControlPlane) triggerWebhook(orchestration *Orchestration) error {
@@ -664,8 +751,29 @@ func sanitizeJSONOutput(input string) string {
 	return input
 }
 
+func (o *Orchestration) GetSubTasksFor(serviceID string) map[string]SubTask {
+	out := map[string]SubTask{}
+	for _, subTask := range o.Plan.Tasks {
+		if strings.EqualFold(subTask.Service, serviceID) {
+			out[subTask.ID] = SubTask{
+				ID:             subTask.ID,
+				Service:        subTask.Service,
+				ServiceDetails: subTask.ServiceDetails,
+				Input:          subTask.Input,
+				Status:         subTask.Status,
+				Error:          subTask.Error,
+			}
+		}
+	}
+	return out
+}
+
 func (o *Orchestration) Executable() bool {
 	return o.Status != NotActionable && o.Status != Failed
+}
+
+func (o *Orchestration) IsActive() bool {
+	return o.Status == Processing || o.Status == Paused
 }
 
 func (s *SubTask) extractDependencies() DependencyKeys {

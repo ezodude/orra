@@ -4,10 +4,10 @@ import (
 	"container/list"
 	"context"
 	"encoding/json"
-	"net/http"
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/olahol/melody"
 	"github.com/rs/zerolog"
 )
@@ -23,6 +23,7 @@ type ControlPlane struct {
 	workerMu             sync.RWMutex
 	WebSocketManager     *WebSocketManager
 	openAIKey            string
+	mu                   sync.RWMutex
 	Logger               zerolog.Logger
 }
 
@@ -36,6 +37,7 @@ type WebSocketQueuedMessage struct {
 	Time    time.Time
 }
 
+type ServiceHealthCallback func(serviceID string, isHealthy bool)
 type WebSocketCallback func(json.RawMessage, error)
 
 type WebSocketManager struct {
@@ -50,6 +52,10 @@ type WebSocketManager struct {
 	messageExpiration time.Duration
 	pingInterval      time.Duration
 	pongWait          time.Duration
+	serviceHealth     map[string]bool
+	healthMu          sync.RWMutex
+	healthCallback    ServiceHealthCallback
+	healthCallbackMu  sync.RWMutex
 }
 
 type Project struct {
@@ -59,14 +65,14 @@ type Project struct {
 }
 
 type OrchestrationState struct {
-	ID             string
-	ProjectID      string
-	Plan           *ServiceCallingPlan
-	CompletedTasks map[string]bool
-	Status         Status
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Error          string
+	ID            string
+	ProjectID     string
+	Plan          *ServiceCallingPlan
+	TasksStatuses map[string]Status
+	Status        Status
+	CreatedAt     time.Time
+	LastUpdated   time.Time
+	Error         string
 }
 
 type LogEntry struct {
@@ -85,7 +91,6 @@ type LogManager struct {
 	mu             sync.RWMutex
 	retention      time.Duration
 	cleanupTicker  *time.Ticker
-	webhookClient  *http.Client
 	controlPlane   *ControlPlane
 	Logger         zerolog.Logger
 }
@@ -115,13 +120,11 @@ type ResultAggregator struct {
 	Dependencies DependencyKeys
 	LogManager   *LogManager
 	logState     *LogState
-	stateMu      sync.Mutex
 }
 
 type FailureTracker struct {
 	LogManager *LogManager
 	logState   *LogState
-	stateMu    sync.Mutex
 }
 
 type TaskWorker struct {
@@ -130,7 +133,7 @@ type TaskWorker struct {
 	Dependencies DependencyKeys
 	LogManager   *LogManager
 	logState     *LogState
-	stateMu      sync.Mutex
+	backOff      *backoff.ExponentialBackOff
 }
 
 type Task struct {

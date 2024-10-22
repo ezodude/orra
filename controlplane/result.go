@@ -106,7 +106,7 @@ func (r *ResultAggregator) processEntry(entry LogEntry, orchestrationID string) 
 	r.LogManager.Logger.Debug().
 		Msgf("All result aggregator dependencies have been processed for orchestration: %s", orchestrationID)
 
-	if _, err := r.LogManager.MarkTaskCompleted(orchestrationID, entry.ID()); err != nil {
+	if err := r.LogManager.MarkTaskCompleted(orchestrationID, entry.ID()); err != nil {
 		return r.LogManager.AppendFailureToLog(orchestrationID, ResultAggregatorID, ResultAggregatorID, err.Error())
 	}
 
