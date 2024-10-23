@@ -99,12 +99,7 @@ func (p *ControlPlane) ExecuteOrchestration(orchestration *Orchestration) {
 	initialEntry := NewLogEntry("task_output", TaskZero, orchestration.taskZero, "control-panel", 0)
 
 	p.Logger.Debug().Msgf("About to append initial entry to Log for orchestration %s", orchestration.ID)
-	if err := log.Append(initialEntry); err != nil {
-		p.Logger.Error().
-			Str("OrchestrationID", orchestration.ID).
-			Err(fmt.Errorf("error appending initial entry: %w", err))
-		return
-	}
+	log.Append(initialEntry)
 }
 
 func (p *ControlPlane) FinalizeOrchestration(

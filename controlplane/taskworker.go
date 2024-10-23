@@ -139,19 +139,7 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.ServiceID, err.Error())
 	}
 
-	// Create a new log entry for our task's output
-	newEntry := NewLogEntry("task_output", w.TaskID, output, w.ServiceID, 0)
-
-	// Append our output to the log
-	if err := w.LogManager.GetLog(orchestrationID).Append(newEntry); err != nil {
-		w.LogManager.Logger.Error().Err(err).Msgf("Cannot append task %s output to Log for orchestration %s", w.TaskID, orchestrationID)
-		return w.LogManager.AppendFailureToLog(
-			orchestrationID,
-			w.TaskID,
-			w.ServiceID,
-			fmt.Errorf("failed to append task output to log: %w", err).Error())
-	}
-
+	w.LogManager.AppendToLog(orchestrationID, "task_output", w.TaskID, output, w.ServiceID)
 	return nil
 }
 
@@ -207,11 +195,6 @@ func (w *TaskWorker) executeTaskWithRetry(ctx context.Context, orchestrationID s
 		return nil, err
 	}
 
-	successEntry := NewLogEntry("task_output", w.TaskID, result, w.ServiceID, 0)
-	if err := w.LogManager.GetLog(orchestrationID).Append(successEntry); err != nil {
-		return nil, err
-	}
-
 	return result, nil
 }
 
@@ -238,7 +221,6 @@ func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (j
 	errChan := make(chan error, 1)
 
 	w.LogManager.controlPlane.WebSocketManager.RegisterTaskCallback(executionID, func(result json.RawMessage, err error) {
-
 		fields := map[string]any{
 			"executionID": executionID,
 			"result":      string(result),

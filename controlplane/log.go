@@ -126,6 +126,21 @@ func (lm *LogManager) GetOrchestrationProjectID(orchestrationID string) string {
 	return lm.orchestrations[orchestrationID].ProjectID
 }
 
+func (lm *LogManager) AppendToLog(orchestrationID, entryType, id string, reason json.RawMessage, producerID string) {
+	// Create a new log entry for our task's output
+	newEntry := NewLogEntry(entryType, id, reason, producerID, 0)
+
+	log, exists := lm.logs[orchestrationID]
+	if !exists {
+		lm.Logger.Info().
+			Str("Orchestration", orchestrationID).
+			Msg("Cannot append to Log, orchestration may have been already finalised.")
+		return
+	}
+
+	log.Append(newEntry)
+}
+
 func (lm *LogManager) AppendFailureToLog(orchestrationID, id, producerID, reason string) error {
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
@@ -135,13 +150,7 @@ func (lm *LogManager) AppendFailureToLog(orchestrationID, id, producerID, reason
 		return fmt.Errorf("failed to marshal reason for log entry: %w", err)
 	}
 
-	// Create a new log entry for our task's output
-	newEntry := NewLogEntry("task_failure", id, reasonData, producerID, 0)
-
-	if err := lm.logs[orchestrationID].Append(newEntry); err != nil {
-		return fmt.Errorf("failed to append task output to log: %w", err)
-	}
-
+	lm.AppendToLog(orchestrationID, "task_failure", id, reasonData, producerID)
 	return nil
 }
 
@@ -235,11 +244,8 @@ func (lm *LogManager) UpdateOrchestrationStatus(orchestrationID string, tasks ma
 		return fmt.Errorf("failed to marshal status change for orchestration %s: %w", orchestrationID, err)
 	}
 
-	return lm.
-		logs[orchestrationID].
-		Append(
-			NewLogEntry("orchestration_status_change", entryID, message, "log_manager", 0),
-		)
+	lm.AppendToLog(orchestrationID, "orchestration_status_change", entryID, message, "log_manager")
+	return nil
 }
 
 func (lm *LogManager) GetOrchestrationStatus(orchestrationID string) (Status, error) {
@@ -298,12 +304,12 @@ func NewLog() *Log {
 }
 
 // Append ensures all appends are idempotent
-func (l *Log) Append(entry LogEntry) error {
+func (l *Log) Append(entry LogEntry) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if l.seenEntries[entry.ID()] {
-		return nil
+		return
 	}
 
 	entry.offset = l.CurrentOffset
@@ -312,7 +318,7 @@ func (l *Log) Append(entry LogEntry) error {
 	l.lastAccessed = time.Now().UTC()
 	l.seenEntries[entry.ID()] = true
 
-	return nil
+	return
 }
 
 func (l *Log) ReadFrom(offset uint64) []LogEntry {
