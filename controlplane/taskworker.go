@@ -13,7 +13,7 @@ import (
 
 var (
 	maxRetries               = 5
-	maxExecutionTimeOutDelay = 60 * time.Second
+	maxExecutionTimeOutDelay = 30 * time.Second
 )
 
 type RetryableError struct {
@@ -77,7 +77,7 @@ func (w *TaskWorker) Start(ctx context.Context, orchestrationID string) {
 	}
 }
 
-func (w *TaskWorker) PollLog(ctx context.Context, orchestrationID string, logStream *Log, entriesChan chan<- LogEntry) {
+func (w *TaskWorker) PollLog(ctx context.Context, _ string, logStream *Log, entriesChan chan<- LogEntry) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -166,6 +166,9 @@ func (w *TaskWorker) executeTaskWithRetry(ctx context.Context, orchestrationID s
 		}
 
 		if paused {
+			w.LogManager.Logger.Debug().
+				Str("TaskID", w.TaskID).
+				Msgf("task is paused for orchestration: %s", orchestrationID)
 			return backoff.Permanent(fmt.Errorf("task is paused"))
 		}
 
