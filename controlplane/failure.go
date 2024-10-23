@@ -74,9 +74,9 @@ func (f *FailureTracker) PollLog(ctx context.Context, orchestrationID string, lo
 				}
 			}
 
-			f.LogManager.Logger.Debug().
-				Interface("entries", processableEntries).
-				Msgf("polling entries for failure tracker in orchestration: %s", orchestrationID)
+			//f.LogManager.Logger.Debug().
+			//	Interface("entries", processableEntries).
+			//	Msgf("polling entries for failure tracker in orchestration: %s", orchestrationID)
 		case <-ctx.Done():
 			return
 		}
