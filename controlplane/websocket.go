@@ -162,7 +162,10 @@ func (wsm *WebSocketManager) handleTaskResult(message struct {
 	wsm.callbacksMu.RUnlock()
 
 	if !exists {
-		wsm.logger.Error().Str("taskID", message.TaskID).Msg("No callback registered for task")
+		wsm.logger.Error().
+			Str("taskID", message.TaskID).
+			Str("executionID", message.ExecutionID).
+			Msg("No callback registered for task")
 		return
 	}
 
