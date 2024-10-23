@@ -76,9 +76,9 @@ func (r *ResultAggregator) PollLog(ctx context.Context, orchestrationID string, 
 				}
 			}
 
-			r.LogManager.Logger.Debug().
-				Interface("entries", processableEntries).
-				Msgf("polling log entries for result aggregator in orchestration: %s", orchestrationID)
+			//r.LogManager.Logger.Debug().
+			//	Interface("entries", processableEntries).
+			//	Msgf("polling log entries for result aggregator in orchestration: %s", orchestrationID)
 
 		case <-ctx.Done():
 			return
