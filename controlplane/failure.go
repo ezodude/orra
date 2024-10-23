@@ -50,7 +50,7 @@ func (f *FailureTracker) Start(ctx context.Context, orchestrationID string) {
 	}
 }
 
-func (f *FailureTracker) PollLog(ctx context.Context, orchestrationID string, logStream *Log, entriesChan chan<- LogEntry) {
+func (f *FailureTracker) PollLog(ctx context.Context, _ string, logStream *Log, entriesChan chan<- LogEntry) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
