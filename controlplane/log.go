@@ -127,6 +127,9 @@ func (lm *LogManager) GetOrchestrationProjectID(orchestrationID string) string {
 }
 
 func (lm *LogManager) AppendFailureToLog(orchestrationID, id, producerID, reason string) error {
+	lm.mu.Lock()
+	defer lm.mu.Unlock()
+
 	reasonData, err := json.Marshal(reason)
 	if err != nil {
 		return fmt.Errorf("failed to marshal reason for log entry: %w", err)
@@ -135,8 +138,7 @@ func (lm *LogManager) AppendFailureToLog(orchestrationID, id, producerID, reason
 	// Create a new log entry for our task's output
 	newEntry := NewLogEntry("task_failure", id, reasonData, producerID, 0)
 
-	// Append our output to the log
-	if err := lm.GetLog(orchestrationID).Append(newEntry); err != nil {
+	if err := lm.logs[orchestrationID].Append(newEntry); err != nil {
 		return fmt.Errorf("failed to append task output to log: %w", err)
 	}
 
