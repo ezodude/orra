@@ -105,9 +105,9 @@ type LogManager struct {
 type Log struct {
 	Entries       []LogEntry
 	CurrentOffset uint64
-	mu            sync.RWMutex
 	seenEntries   map[string]bool
 	lastAccessed  time.Time // For cleanup
+	mu            sync.RWMutex
 }
 
 type DependencyState map[string]json.RawMessage
