@@ -180,6 +180,12 @@ func (lm *LogManager) UpdateOrchestrationStatus(orchestrationID string, tasks ma
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
+	lm.Logger.Debug().
+		Str("expectedOldStatus", oldStatus.String()).
+		Str("newIntendedStatus", newStatus.String()).
+		Fields(tasks).
+		Msgf("Updating orchestration status: %s", orchestrationID)
+
 	state, exists := lm.orchestrations[orchestrationID]
 	if !exists {
 		return fmt.Errorf("orchestration %s not found", orchestrationID)
