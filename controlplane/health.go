@@ -54,6 +54,11 @@ func (h *HealthCoordinator) restartOrchestrationTasks(orchestrationsAndTasks map
 }
 
 func (h *HealthCoordinator) restartTask(orchestrationID string, task SubTask) {
+	h.logger.Debug().
+		Str("orchestrationID", orchestrationID).
+		Str("taskID", task.ID).
+		Msg("Restarting task")
+
 	h.plane.StopTaskWorker(orchestrationID, task.ID)
 	h.plane.CreateAndStartTaskWorker(orchestrationID, task)
 }
