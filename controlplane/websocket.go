@@ -200,10 +200,11 @@ func (wsm *WebSocketManager) SendTask(serviceID string, task *Task) error {
 	}
 
 	if !connected {
-		wsm.logger.Debug().
-			Fields(map[string]any{"serviceID": serviceID, "taskID": task.ID}).
-			Msg("Queueing up message for disconnected Service")
-		wsm.QueueMessage(serviceID, jsonMessage)
+		//wsm.logger.Debug().
+		//	Fields(map[string]any{"serviceID": serviceID, "taskID": task.ID}).
+		//	Msg("Queueing up message for disconnected Service")
+		//wsm.QueueMessage(serviceID, jsonMessage)
+		//wsm.healthCallback(serviceID, false)
 		return nil
 	}
 
