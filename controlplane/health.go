@@ -6,13 +6,20 @@ import (
 
 func NewHealthCoordinator(plane *ControlPlane, manager *LogManager, logger zerolog.Logger) *HealthCoordinator {
 	return &HealthCoordinator{
-		plane:      plane,
-		logManager: manager,
-		logger:     logger,
+		plane:           plane,
+		logManager:      manager,
+		logger:          logger,
+		lastHealthState: make(map[string]bool),
 	}
 }
 
 func (h *HealthCoordinator) handleServiceHealthChange(serviceID string, isHealthy bool) {
+	if health, exists := h.lastHealthState[serviceID]; exists && health == isHealthy {
+		return
+	}
+
+	h.lastHealthState[serviceID] = isHealthy
+
 	orchestrationsAndTasks := h.GetActiveOrchestrationsAndTasksForService(serviceID)
 	if !isHealthy {
 		h.logManager.UpdateActiveOrchestrations(orchestrationsAndTasks, serviceID, "service_unhealthy", Processing, Paused)
