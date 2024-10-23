@@ -67,7 +67,7 @@ func (wsm *WebSocketManager) sendQueuedMessages(serviceID string, s *melody.Sess
 
 		wsm.logger.Debug().
 			Fields(map[string]any{"serviceID": serviceID, "task": string(msg.Message)}).
-			Msg("Queueing up message for disconnected Service")
+			Msg("Sending queued message")
 
 		if err := s.Write(msg.Message); err != nil {
 			wsm.logger.Error().Err(err).Str("serviceID", serviceID).Msg("Failed to send queued message")
@@ -109,11 +109,6 @@ func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
 		return
 	}
 
-	if err := wsm.acknowledgeMessageReceived(s, messageWrapper.ID); err != nil {
-		wsm.logger.Error().Err(err).Msg("Failed to handle messageWrapper acknowledgement")
-		return
-	}
-
 	switch messagePayload.Type {
 	case WSPong:
 		s.Set("lastPong", time.Now().UTC())
@@ -121,6 +116,11 @@ func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
 		wsm.handleTaskResult(messagePayload)
 	default:
 		wsm.logger.Warn().Str("type", messagePayload.Type).Msg("Received unknown messageWrapper type")
+	}
+
+	if err := wsm.acknowledgeMessageReceived(s, messageWrapper.ID); err != nil {
+		wsm.logger.Error().Err(err).Msg("Failed to handle messageWrapper acknowledgement")
+		return
 	}
 }
 
