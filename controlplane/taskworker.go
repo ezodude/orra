@@ -101,9 +101,9 @@ func (w *TaskWorker) PollLog(ctx context.Context, orchestrationID string, logStr
 				}
 			}
 
-			w.LogManager.Logger.Debug().
-				Interface("entries", processableEntries).
-				Msgf("polling entries for task %s - orchestration %s", w.TaskID, orchestrationID)
+			//w.LogManager.Logger.Debug().
+			//	Interface("entries", processableEntries).
+			//	Msgf("polling entries for task %s - orchestration %s", w.TaskID, orchestrationID)
 		case <-ctx.Done():
 			return
 		}
