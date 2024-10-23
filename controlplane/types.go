@@ -58,6 +58,13 @@ type WebSocketManager struct {
 	healthCallbackMu  sync.RWMutex
 }
 
+type HealthCoordinator struct {
+	plane      *ControlPlane
+	logManager *LogManager
+	logger     zerolog.Logger
+	mu         sync.RWMutex
+}
+
 type Project struct {
 	ID      string `json:"id"`
 	APIKey  string `json:"apiKey"`

@@ -26,11 +26,11 @@ func NewControlPlane(openAIKey string) *ControlPlane {
 	return plane
 }
 
-func (p *ControlPlane) Initialise(ctx context.Context, logMgr *LogManager, wsManager *WebSocketManager, Logger zerolog.Logger) {
+func (p *ControlPlane) Initialise(ctx context.Context, logMgr *LogManager, wsManager *WebSocketManager, coordinator *HealthCoordinator, Logger zerolog.Logger) {
 	p.LogManager = logMgr
 	p.Logger = Logger
 	p.WebSocketManager = wsManager
-	p.WebSocketManager.RegisterHealthCallback(p.handleServiceHealthChange)
+	p.WebSocketManager.RegisterHealthCallback(coordinator.handleServiceHealthChange)
 	p.TidyWebSocketArtefacts(ctx)
 }
 
@@ -332,221 +332,59 @@ func (p *ControlPlane) generateServiceKey(projectID string) string {
 	return fmt.Sprintf("%s-%s", projectID, uuid.New().String())
 }
 
-func (p *ControlPlane) discoverProjectServices(projectID string) ([]*ServiceInfo, error) {
+func (p *ControlPlane) ProjectsForService(serviceID string) []string {
 	p.servicesMu.RLock()
 	defer p.servicesMu.RUnlock()
-
-	var out []*ServiceInfo
-	projectServices, ok := p.services[projectID]
-	if !ok {
-		return nil, fmt.Errorf("no services found for project %s", projectID)
-	}
-	for _, s := range projectServices {
-		out = append(out, s)
-	}
-	return out, nil
-}
-
-func (p *ControlPlane) generateLLMPrompt(orchestration *Orchestration, services []*ServiceInfo) (string, error) {
-	serviceDescriptions := make([]string, len(services))
-	for i, service := range services {
-		schemaStr, err := json.Marshal(service.Schema)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal service schema: %w", err)
-		}
-		serviceDescriptions[i] = fmt.Sprintf("Service ID: %s\nService Name: %s\nDescription: %s\nSchema: %s", service.ID, service.Name, service.Description, string(schemaStr))
-	}
-
-	actionStr := orchestration.Action.Content
-
-	dataStr, err := json.Marshal(orchestration.Params)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal data: %w", err)
-	}
-
-	prompt := fmt.Sprintf(`You are an AI orchestrator tasked with planning the execution of services based on a user's action. A user's action contains PARAMS for the action to be executed, USE THEM. Your goal is to create an efficient, parallel execution plan that fulfills the user's request.
-
-Available Services:
-%s
-
-User Action: %s
-
-Action Params:
-%s
-
-Guidelines:
-1. Each service described above contains input/output types and description. You must strictly adhere to these types and descriptions when using the services.
-2. Each task in the plan should strictly use one of the available services. Follow the JSON conventions for each task.
-3. Each task MUST have a unique ID, which is strictly increasing.
-4. With the excpetion of Task 0, whose inputs are constants derived from the User Action, inputs for other tasks have to be outputs from preceding tasks. In the latter case, use the format $taskId to denote the ID of the previous task whose output will be the input.
-5. There can only be a single Task 0, other tasks HAVE TO CORRESPOND TO AVAILABLE SERVICES.
-6. Ensure the plan maximizes parallelizability.
-7. Only use the provided services.
-	- If a query cannot be addressed using these, USE A "final" TASK TO SUGGEST THE NEXT STEPS.
-		- The final task MUST have "final" as the task ID.
-		- The final task DOES NOT require a service.
-		- The final task input PARAM key should be "error" and the value should explain why the query cannot be addressed.   
-		- NO OTHER TASKS ARE REQUIRED. 
-8. Never explain the plan with comments.
-9. Never introduce new services other than the ones provided.
-
-Please generate a plan in the following JSON format:
-
-{
-  "tasks": [
-    {
-      "id": "task0",
-      "input": {
-        "param1": "value1"
-      }
-    },
-    {
-      "id": "task1",
-      "service": "ServiceID",
-      "input": {
-        "param1": "$task0.param1"
-      }
-    },
-    {
-      "id": "task2",
-      "service": "AnotherServiceID",
-      "input": {
-        "param1": "$task1.param1"
-      }
-    }
-  ],
-  "parallel_groups": [
-    ["task1"],
-    ["task2"]
-  ]
-}
-
-Ensure that the plan is efficient, maximizes parallelization, and accurately fulfills the user's action using the available services. If the action cannot be completed with the given services, explain why in a "final" task and suggest alternatives if possible.
-
-Generate the execution plan:`,
-		strings.Join(serviceDescriptions, "\n\n"),
-		actionStr,
-		string(dataStr),
-	)
-
-	return prompt, nil
-}
-
-func (p *ControlPlane) decomposeAction(orchestration *Orchestration, services []*ServiceInfo) (*ServiceCallingPlan, error) {
-	prompt, err := p.generateLLMPrompt(orchestration, services)
-	if err != nil {
-		return nil, fmt.Errorf("error generating LLM prompt for decomposing actions: %v", err)
-	}
-
-	p.Logger.Debug().
-		Str("Prompt", prompt).
-		Msg("Decompose action prompt")
-
-	client := openai.NewClient(p.openAIKey)
-	resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: openai.GPT4oLatest,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: prompt,
-			},
-		},
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("error calling OpenAI API: %v", err)
-	}
-
-	var result *ServiceCallingPlan
-	sanitisedJSON := sanitizeJSONOutput(resp.Choices[0].Message.Content)
-	p.Logger.Debug().
-		Str("Sanitized JSON", sanitisedJSON).
-		Msg("Service calling plan")
-
-	err = json.Unmarshal([]byte(sanitisedJSON), &result)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing LLM response as JSON: %v", err)
-	}
-
-	result.ProjectID = orchestration.ProjectID
-
-	return result, nil
-}
-
-func (p *ControlPlane) validateInput(services []*ServiceInfo, subTasks []*SubTask) error {
-	serviceMap := make(map[string]*ServiceInfo)
-	for _, service := range services {
-		serviceMap[service.ID] = service
-	}
-
-	for _, subTask := range subTasks {
-		service, ok := serviceMap[subTask.Service]
-		if !ok {
-			return fmt.Errorf("service %s not found for subtask %s", subTask.Service, subTask.ID)
-		}
-
-		for inputKey := range subTask.Input {
-			if !service.Schema.InputIncludes(inputKey) {
-				return fmt.Errorf("input %s not supported by service %s for subtask %s", inputKey, subTask.Service, subTask.ID)
+	var out []string
+	for projectId, pServices := range p.services {
+		for svcId := range pServices {
+			if svcId == serviceID {
+				out = append(out, projectId)
 			}
 		}
 	}
-
-	return nil
+	return out
 }
 
-func (p *ControlPlane) addServiceDetails(services []*ServiceInfo, subTasks []*SubTask) error {
-	serviceMap := make(map[string]*ServiceInfo)
-	for _, service := range services {
-		serviceMap[service.ID] = service
-	}
-
-	for _, subTask := range subTasks {
-		service, ok := serviceMap[subTask.Service]
-		if !ok {
-			return fmt.Errorf("service %s not found for subtask %s", subTask.Service, subTask.ID)
+func (p *ControlPlane) ActiveOrchestrationsWithTasks(projects []string, serviceID string) map[string]map[string]SubTask {
+	p.orchestrationStoreMu.RLock()
+	defer p.orchestrationStoreMu.RUnlock()
+	out := map[string]map[string]SubTask{}
+	for _, projectId := range projects {
+		for _, orchestration := range p.orchestrationStore {
+			if orchestration.IsActive() && projectId == orchestration.ProjectID {
+				out[orchestration.ID] = orchestration.GetSubTasksFor(serviceID)
+			}
 		}
-		subTask.ServiceDetails = service.String()
 	}
-
-	return nil
+	return out
 }
 
-func (p *ControlPlane) createAndStartWorkers(orchestrationID string, plan *ServiceCallingPlan) {
+func (p *ControlPlane) StopTaskWorker(orchestrationID string, taskID string) {
 	p.workerMu.Lock()
 	defer p.workerMu.Unlock()
 
-	p.logWorkers[orchestrationID] = make(map[string]context.CancelFunc)
-
-	resultDependencies := make(DependencyKeys)
-
-	for _, task := range plan.Tasks {
-		deps := task.extractDependencies()
-		resultDependencies[task.ID] = struct{}{}
-
-		p.Logger.Debug().
-			Fields(map[string]any{
-				"TaskID":          task.ID,
-				"Dependencies":    deps,
-				"OrchestrationID": orchestrationID,
-			}).
-			Msg("Task extracted dependencies")
-
-		worker := NewTaskWorker(task.Service, task.ID, deps, p.LogManager)
-		ctx, cancel := context.WithCancel(context.Background())
-		p.logWorkers[orchestrationID][task.ID] = cancel
-		p.Logger.Debug().
-			Fields(struct {
-				TaskID          string
-				OrchestrationID string
-			}{
-				TaskID:          task.ID,
-				OrchestrationID: orchestrationID,
-			}).
-			Msg("Starting worker for task")
-
-		go worker.Start(ctx, orchestrationID)
+	if _, ok := p.logWorkers[orchestrationID]; !ok {
+		return
 	}
+
+	cancel, ok := p.logWorkers[orchestrationID][taskID]
+	if !ok {
+	}
+
+	cancel()
+}
+
+func (p *ControlPlane) CreateAndStartTaskWorker(orchestrationID string, task SubTask) {
+	p.workerMu.Lock()
+	defer p.workerMu.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p.logWorkers[orchestrationID][task.ID] = cancel
+
+	worker := NewTaskWorker(task.Service, task.ID, task.extractDependencies(), p.LogManager)
+	go worker.Start(ctx, orchestrationID)
+}
 
 	if len(resultDependencies) == 0 {
 		p.Logger.Error().

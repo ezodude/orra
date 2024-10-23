@@ -1,0 +1,59 @@
+package main
+
+import (
+	"github.com/rs/zerolog"
+)
+
+func NewHealthCoordinator(plane *ControlPlane, manager *LogManager, logger zerolog.Logger) *HealthCoordinator {
+	return &HealthCoordinator{
+		plane:      plane,
+		logManager: manager,
+		logger:     logger,
+	}
+}
+
+func (h *HealthCoordinator) handleServiceHealthChange(serviceID string, isHealthy bool) {
+	orchestrationsAndTasks := h.GetActiveOrchestrationsAndTasksForService(serviceID)
+	if !isHealthy {
+		h.logManager.UpdateActiveOrchestrations(orchestrationsAndTasks, serviceID, "service_unhealthy", Processing, Paused)
+		return
+	}
+
+	h.logManager.UpdateActiveOrchestrations(orchestrationsAndTasks, serviceID, "service_healthy", Paused, Processing)
+	h.restartOrchestrationTasks(orchestrationsAndTasks)
+}
+
+func (h *HealthCoordinator) GetActiveOrchestrationsAndTasksForService(serviceID string) map[string]map[string]SubTask {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	projects := h.plane.ProjectsForService(serviceID)
+	return h.plane.ActiveOrchestrationsWithTasks(projects, serviceID)
+}
+
+func (h *HealthCoordinator) restartOrchestrationTasks(orchestrationsAndTasks map[string]map[string]SubTask) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for orchestrationID, tasks := range orchestrationsAndTasks {
+		for _, task := range tasks {
+			completed, err := h.logManager.IsTaskCompleted(orchestrationID, task.ID)
+			if err != nil {
+				h.logger.Error().
+					Err(err).
+					Str("orchestrationID", orchestrationID).
+					Str("taskID", task.ID).
+					Msg("failed to check if task is completed during restart - continuing")
+			}
+
+			if !completed {
+				h.restartTask(orchestrationID, task)
+			}
+		}
+	}
+}
+
+func (h *HealthCoordinator) restartTask(orchestrationID string, task SubTask) {
+	h.plane.StopTaskWorker(orchestrationID, task.ID)
+	h.plane.CreateAndStartTaskWorker(orchestrationID, task)
+}
