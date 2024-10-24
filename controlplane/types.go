@@ -140,6 +140,7 @@ type TaskWorker struct {
 	LogManager   *LogManager
 	logState     *LogState
 	backOff      *backoff.ExponentialBackOff
+	lastHealthy  bool
 }
 
 type Task struct {

@@ -272,16 +272,16 @@ func (lm *LogManager) IsOrchestrationPaused(orchestrationID string) (bool, error
 	return state.Status == Paused, nil
 }
 
-func (lm *LogManager) IsTaskPaused(orchestrationID, taskID string) (bool, error) {
+func (lm *LogManager) IsTaskPaused(orchestrationID, taskID string) bool {
 	lm.mu.RLock()
 	defer lm.mu.RUnlock()
 
 	state, exists := lm.orchestrations[orchestrationID]
 	if !exists {
-		return false, fmt.Errorf("orchestration %s not found", orchestrationID)
+		return false
 	}
 
-	return state.TasksStatuses[taskID] == Paused, nil
+	return state.TasksStatuses[taskID] == Paused
 }
 
 func (lm *LogManager) IsTaskCompleted(orchestrationID, taskID string) (bool, error) {

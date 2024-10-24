@@ -36,8 +36,8 @@ func (wsm *WebSocketManager) HandleConnection(serviceID string, serviceName stri
 	wsm.connMap[serviceID] = s
 	wsm.connMu.Unlock()
 
+	wsm.UpdateServiceHealth(serviceID, true)
 	go wsm.pingRoutine(s)
-	wsm.sendQueuedMessages(serviceID, s)
 
 	wsm.logger.Info().
 		Str("serviceID", serviceID).
@@ -45,42 +45,12 @@ func (wsm *WebSocketManager) HandleConnection(serviceID string, serviceName stri
 		Msg("New WebSocket connection established")
 }
 
-func (wsm *WebSocketManager) sendQueuedMessages(serviceID string, s *melody.Session) {
-	wsm.messageQueuesMu.RLock()
-	queue, exists := wsm.messageQueues[serviceID]
-	wsm.messageQueuesMu.RUnlock()
-
-	if !exists {
-		return
-	}
-
-	queue.mu.Lock()
-	defer queue.mu.Unlock()
-
-	for e := queue.Front(); e != nil; e = e.Next() {
-		msg := e.Value.(*WebSocketQueuedMessage)
-		if time.Since(msg.Time) > wsm.messageExpiration {
-			queue.Remove(e)
-			continue
-		}
-
-		wsm.logger.Debug().
-			Fields(map[string]any{"serviceID": serviceID, "task": string(msg.Message)}).
-			Msg("Sending queued message")
-
-		if err := s.Write(msg.Message); err != nil {
-			wsm.logger.Error().Err(err).Str("serviceID", serviceID).Msg("Failed to send queued message")
-			return
-		}
-		queue.Remove(e)
-	}
-}
-
 func (wsm *WebSocketManager) HandleDisconnection(serviceID string) {
 	wsm.connMu.Lock()
 	delete(wsm.connMap, serviceID)
 	wsm.connMu.Unlock()
 
+	wsm.UpdateServiceHealth(serviceID, false)
 	wsm.logger.Info().Str("ServiceID", serviceID).Msg("WebSocket connection closed")
 }
 
@@ -105,6 +75,9 @@ func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte, fn Ser
 	switch messagePayload.Type {
 	case WSPong:
 		s.Set("lastPong", time.Now().UTC())
+		if serviceID, ok := s.Get("serviceID"); ok {
+			wsm.UpdateServiceHealth(serviceID.(string), true)
+		}
 	case "task_status":
 		wsm.logger.
 			Info().
@@ -186,33 +159,10 @@ func (wsm *WebSocketManager) SendTask(serviceID string, task *Task) error {
 	}
 
 	if !connected {
-		//wsm.logger.Debug().
-		//	Fields(map[string]any{"serviceID": serviceID, "taskID": task.ID}).
-		//	Msg("Queueing up message for disconnected Service")
-		//wsm.QueueMessage(serviceID, message)
-		//wsm.healthCallback(serviceID, false)
 		return nil
 	}
 
 	return session.Write(message)
-}
-
-func (wsm *WebSocketManager) QueueMessage(serviceID string, message []byte) {
-	wsm.messageQueuesMu.Lock()
-	queue, exists := wsm.messageQueues[serviceID]
-	if !exists {
-		queue = &WebSocketMessageQueue{List: list.New()}
-		wsm.messageQueues[serviceID] = queue
-	}
-	wsm.messageQueuesMu.Unlock()
-
-	queue.mu.Lock()
-	defer queue.mu.Unlock()
-	if queue.Len() >= MaxQueueSize {
-		wsm.logger.Warn().Str("serviceID", serviceID).Msg("Message queue full, dropping oldest message")
-		queue.Remove(queue.Front())
-	}
-	queue.PushBack(&WebSocketQueuedMessage{Message: message, Time: time.Now().UTC()})
 }
 
 func (wsm *WebSocketManager) pingRoutine(s *melody.Session) {
@@ -301,4 +251,11 @@ func (wsm *WebSocketManager) CleanupExpiredMessages() {
 
 		wsm.logger.Debug().Str("serviceID", serviceID).Int("queueLength", queue.Len()).Msg("Cleaned up expired messages")
 	}
+}
+
+func (wsm *WebSocketManager) IsServiceHealthy(serviceID string) bool {
+	wsm.healthMu.RLock()
+	defer wsm.healthMu.RUnlock()
+	healthy, exists := wsm.serviceHealth[serviceID]
+	return exists && healthy
 }
