@@ -38,15 +38,13 @@ type WebSocketQueuedMessage struct {
 }
 
 type ServiceHealthCallback func(serviceID string, isHealthy bool)
-type WebSocketCallback func(json.RawMessage, error)
+type ServiceFinder func(serviceID string) (*ServiceInfo, error)
 
 type WebSocketManager struct {
 	melody            *melody.Melody
 	logger            zerolog.Logger
 	connMap           map[string]*melody.Session
 	connMu            sync.RWMutex
-	taskCallbacks     map[string]WebSocketCallback
-	callbacksMu       sync.RWMutex
 	messageQueues     map[string]*WebSocketMessageQueue
 	messageQueuesMu   sync.RWMutex
 	messageExpiration time.Duration
@@ -136,7 +134,7 @@ type FailureTracker struct {
 }
 
 type TaskWorker struct {
-	ServiceID    string
+	Service      *ServiceInfo
 	TaskID       string
 	Dependencies DependencyKeys
 	LogManager   *LogManager
@@ -145,13 +143,26 @@ type TaskWorker struct {
 }
 
 type Task struct {
+	Type            string          `json:"type"`
 	ID              string          `json:"id"`
 	Input           json.RawMessage `json:"input"`
 	ExecutionID     string          `json:"executionId"`
-	ServiceID       string          `json:"-"`
+	IdempotencyKey  IdempotencyKey  `json:"idempotencyKey"`
+	ServiceID       string          `json:"serviceId"`
 	OrchestrationID string          `json:"-"`
 	ProjectID       string          `json:"-"`
 	Status          Status          `json:"-"`
+}
+
+type TaskResult struct {
+	Type           string          `json:"type"`
+	TaskID         string          `json:"taskId"`
+	ExecutionID    string          `json:"executionId"`
+	ServiceID      string          `json:"serviceId"`
+	IdempotencyKey IdempotencyKey  `json:"idempotencyKey"`
+	Result         json.RawMessage `json:"result,omitempty"`
+	Error          string          `json:"error,omitempty"`
+	Status         string          `json:"status,omitempty"`
 }
 
 // Source is either user input or the subtask Id of where the value is expected from
@@ -174,13 +185,14 @@ type ServiceSchema struct {
 }
 
 type ServiceInfo struct {
-	Type        ServiceType   `json:"type"`
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Schema      ServiceSchema `json:"schema"`
-	ProjectID   string        `json:"-"`
-	Version     int64         `json:"version"`
+	Type             ServiceType       `json:"type"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Description      string            `json:"description"`
+	Schema           ServiceSchema     `json:"schema"`
+	ProjectID        string            `json:"-"`
+	Version          int64             `json:"version"`
+	IdempotencyStore *IdempotencyStore `json:"-"`
 }
 
 type Orchestration struct {

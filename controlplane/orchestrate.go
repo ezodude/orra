@@ -332,7 +332,21 @@ func (p *ControlPlane) createAndStartWorkers(orchestrationID string, plan *Servi
 			}).
 			Msg("Task extracted dependencies")
 
-		worker := NewTaskWorker(task.Service, task.ID, deps, p.LogManager)
+		service, err := p.GetServiceByID(task.Service)
+		if err != nil {
+			p.Logger.Error().Err(err).
+				Str("taskID", task.ID).
+				Str("ServiceID", task.Service).
+				Msg("Failed to get service for task")
+			return
+		}
+
+		worker := NewTaskWorker(
+			service,
+			task.ID,
+			deps,
+			p.LogManager,
+		)
 		ctx, cancel := context.WithCancel(context.Background())
 		p.logWorkers[orchestrationID][task.ID] = cancel
 		p.Logger.Debug().

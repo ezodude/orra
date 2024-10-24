@@ -20,7 +20,6 @@ func NewWebSocketManager(logger zerolog.Logger) *WebSocketManager {
 		melody:            m,
 		logger:            logger,
 		connMap:           make(map[string]*melody.Session),
-		taskCallbacks:     make(map[string]WebSocketCallback),
 		messageQueues:     make(map[string]*WebSocketMessageQueue),
 		messageExpiration: time.Hour * 24, // Keep messages for 24 hours
 		pingInterval:      m.Config.PingPeriod,
@@ -85,19 +84,13 @@ func (wsm *WebSocketManager) HandleDisconnection(serviceID string) {
 	wsm.logger.Info().Str("ServiceID", serviceID).Msg("WebSocket connection closed")
 }
 
-func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
+func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte, fn ServiceFinder) {
 	var messageWrapper struct {
 		ID      string          `json:"id"`
 		Payload json.RawMessage `json:"payload"`
 	}
 
-	var messagePayload struct {
-		Type        string          `json:"type"`
-		TaskID      string          `json:"taskId"`
-		ExecutionID string          `json:"executionId"`
-		Result      json.RawMessage `json:"result,omitempty"`
-		Error       string          `json:"error,omitempty"`
-	}
+	var messagePayload TaskResult
 
 	if err := json.Unmarshal(msg, &messageWrapper); err != nil {
 		wsm.logger.Error().Err(err).Msg("Failed to unmarshal wrapped WebSocket messageWrapper")
@@ -112,8 +105,16 @@ func (wsm *WebSocketManager) HandleMessage(s *melody.Session, msg []byte) {
 	switch messagePayload.Type {
 	case WSPong:
 		s.Set("lastPong", time.Now().UTC())
+	case "task_status":
+		wsm.logger.
+			Info().
+			Str("IdempotencyKey", string(messagePayload.IdempotencyKey)).
+			Str("ServiceID", messagePayload.ServiceID).
+			Str("TaskID", messagePayload.TaskID).
+			Str("ExecutionID", messagePayload.ExecutionID).
+			Msgf("Task status: %s", messagePayload.Status)
 	case "task_result":
-		wsm.handleTaskResult(messagePayload)
+		wsm.handleTaskResult(messagePayload, fn)
 	default:
 		wsm.logger.Warn().Str("type", messagePayload.Type).Msg("Received unknown messageWrapper type")
 	}
@@ -150,34 +151,28 @@ func (wsm *WebSocketManager) acknowledgeMessageReceived(s *melody.Session, id st
 	return nil
 }
 
-func (wsm *WebSocketManager) handleTaskResult(message struct {
-	Type        string          `json:"type"`
-	TaskID      string          `json:"taskId"`
-	ExecutionID string          `json:"executionId"`
-	Result      json.RawMessage `json:"result,omitempty"`
-	Error       string          `json:"error,omitempty"`
-}) {
-	wsm.callbacksMu.RLock()
-	callback, exists := wsm.taskCallbacks[message.ExecutionID]
-	wsm.callbacksMu.RUnlock()
-
-	if !exists {
+func (wsm *WebSocketManager) handleTaskResult(message TaskResult, fn ServiceFinder) {
+	service, err := fn(message.ServiceID)
+	if err != nil {
 		wsm.logger.Error().
-			Str("taskID", message.TaskID).
-			Str("executionID", message.ExecutionID).
-			Msg("No callback registered for task")
+			Err(err).
+			Str("serviceID", message.ServiceID).
+			Msg("Failed to get service when handling task result")
 		return
 	}
 
-	wsm.callbacksMu.Lock()
-	if message.Error != "" {
-		callback(nil, fmt.Errorf(message.Error))
-	} else {
-		callback(message.Result, nil)
-	}
-	wsm.callbacksMu.Unlock()
+	service.IdempotencyStore.UpdateExecutionResult(
+		message.IdempotencyKey,
+		message.Result,
+		parseError(message.Error),
+	)
+}
 
-	wsm.UnregisterTaskCallback(message.ExecutionID)
+func parseError(errStr string) error {
+	if errStr == "" {
+		return nil
+	}
+	return fmt.Errorf(errStr)
 }
 
 func (wsm *WebSocketManager) SendTask(serviceID string, task *Task) error {
@@ -185,19 +180,7 @@ func (wsm *WebSocketManager) SendTask(serviceID string, task *Task) error {
 	session, connected := wsm.connMap[serviceID]
 	wsm.connMu.RUnlock()
 
-	message := struct {
-		Type        string          `json:"type"`
-		ID          string          `json:"id"`
-		ExecutionID string          `json:"executionId"`
-		Input       json.RawMessage `json:"input"`
-	}{
-		Type:        "task",
-		ID:          task.ID,
-		ExecutionID: task.ExecutionID,
-		Input:       task.Input,
-	}
-
-	jsonMessage, err := json.Marshal(message)
+	message, err := json.Marshal(task)
 	if err != nil {
 		return fmt.Errorf("failed to convert message to JSON for service %s: %w", serviceID, err)
 	}
@@ -206,12 +189,12 @@ func (wsm *WebSocketManager) SendTask(serviceID string, task *Task) error {
 		//wsm.logger.Debug().
 		//	Fields(map[string]any{"serviceID": serviceID, "taskID": task.ID}).
 		//	Msg("Queueing up message for disconnected Service")
-		//wsm.QueueMessage(serviceID, jsonMessage)
+		//wsm.QueueMessage(serviceID, message)
 		//wsm.healthCallback(serviceID, false)
 		return nil
 	}
 
-	return session.Write(jsonMessage)
+	return session.Write(message)
 }
 
 func (wsm *WebSocketManager) QueueMessage(serviceID string, message []byte) {
@@ -230,18 +213,6 @@ func (wsm *WebSocketManager) QueueMessage(serviceID string, message []byte) {
 		queue.Remove(queue.Front())
 	}
 	queue.PushBack(&WebSocketQueuedMessage{Message: message, Time: time.Now().UTC()})
-}
-
-func (wsm *WebSocketManager) RegisterTaskCallback(executionID string, callback WebSocketCallback) {
-	wsm.callbacksMu.Lock()
-	defer wsm.callbacksMu.Unlock()
-	wsm.taskCallbacks[executionID] = callback
-}
-
-func (wsm *WebSocketManager) UnregisterTaskCallback(executionID string) {
-	wsm.callbacksMu.Lock()
-	defer wsm.callbacksMu.Unlock()
-	delete(wsm.taskCallbacks, executionID)
 }
 
 func (wsm *WebSocketManager) pingRoutine(s *melody.Session) {

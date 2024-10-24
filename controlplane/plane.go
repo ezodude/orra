@@ -61,6 +61,7 @@ func (p *ControlPlane) RegisterOrUpdateService(service *ServiceInfo) error {
 	if len(strings.TrimSpace(service.ID)) == 0 {
 		service.ID = p.generateServiceKey(service.ProjectID)
 		service.Version = 1
+		service.IdempotencyStore = NewIdempotencyStore(0)
 
 		p.Logger.Debug().
 			Str("ProjectID", service.ProjectID).
@@ -73,6 +74,7 @@ func (p *ControlPlane) RegisterOrUpdateService(service *ServiceInfo) error {
 		}
 		service.ID = existingService.ID
 		service.Version = existingService.Version + 1
+		service.IdempotencyStore = existingService.IdempotencyStore
 
 		p.Logger.Debug().
 			Str("ProjectID", service.ProjectID).
@@ -86,16 +88,43 @@ func (p *ControlPlane) RegisterOrUpdateService(service *ServiceInfo) error {
 	return nil
 }
 
-func (p *ControlPlane) GetServiceName(projectID string, serviceID string) (string, error) {
+func (p *ControlPlane) GetServiceByID(serviceID string) (*ServiceInfo, error) {
+	projectID, err := p.GetProjectIDForService(serviceID)
+	if err != nil {
+		p.Logger.Error().Err(err).Str("serviceID", serviceID).Msg("Failed to get project ID from control plane")
+		return nil, err
+	}
+
+	service, err := p.GetService(projectID, serviceID)
+	if err != nil {
+		p.Logger.Error().Err(err).
+			Str("projectID", projectID).
+			Str("serviceID", serviceID).
+			Msg("Failed to get service for project")
+		return nil, err
+	}
+
+	return service, nil
+}
+
+func (p *ControlPlane) GetService(projectID string, serviceID string) (*ServiceInfo, error) {
 	p.servicesMu.RLock()
 	defer p.servicesMu.RUnlock()
 
 	projectServices := p.services[projectID]
 	svc, exists := projectServices[serviceID]
 	if !exists {
-		return "", fmt.Errorf("service %s not found for project %s", serviceID, projectID)
+		return nil, fmt.Errorf("service %s not found for project %s", serviceID, projectID)
 	}
-	return svc.Name, nil
+	return svc, nil
+}
+
+func (p *ControlPlane) GetServiceName(projectID string, serviceID string) (string, error) {
+	service, err := p.GetService(projectID, serviceID)
+	if err != nil {
+		return "", err
+	}
+	return service.Name, nil
 }
 
 func (p *ControlPlane) GetProjectByApiKey(key string) (*Project, error) {
@@ -130,31 +159,31 @@ func (p *ControlPlane) generateServiceKey(projectID string) string {
 	return fmt.Sprintf("%s-%s", projectID, uuid.New().String())
 }
 
-func (p *ControlPlane) ProjectsForService(serviceID string) []string {
+func (p *ControlPlane) GetProjectIDForService(serviceID string) (string, error) {
 	p.servicesMu.RLock()
 	defer p.servicesMu.RUnlock()
-	var out []string
-	for projectId, pServices := range p.services {
+
+	for projectID, pServices := range p.services {
 		for svcId := range pServices {
 			if svcId == serviceID {
-				out = append(out, projectId)
+				return projectID, nil
 			}
 		}
 	}
-	return out
+	return "", fmt.Errorf("no project found for service %s", serviceID)
 }
 
-func (p *ControlPlane) ActiveOrchestrationsWithTasks(projects []string, serviceID string) map[string]map[string]SubTask {
+func (p *ControlPlane) ActiveOrchestrationsWithTasks(projectID string, serviceID string) map[string]map[string]SubTask {
 	p.orchestrationStoreMu.RLock()
 	defer p.orchestrationStoreMu.RUnlock()
 	out := map[string]map[string]SubTask{}
-	for _, projectId := range projects {
-		for _, orchestration := range p.orchestrationStore {
-			if orchestration.IsActive() && projectId == orchestration.ProjectID {
-				out[orchestration.ID] = orchestration.GetSubTasksFor(serviceID)
-			}
+
+	for _, orchestration := range p.orchestrationStore {
+		if orchestration.IsActive() && projectID == orchestration.ProjectID {
+			out[orchestration.ID] = orchestration.GetSubTasksFor(serviceID)
 		}
 	}
+
 	return out
 }
 
@@ -180,7 +209,20 @@ func (p *ControlPlane) CreateAndStartTaskWorker(orchestrationID string, task Sub
 	ctx, cancel := context.WithCancel(context.Background())
 	p.logWorkers[orchestrationID][task.ID] = cancel
 
-	worker := NewTaskWorker(task.Service, task.ID, task.extractDependencies(), p.LogManager)
+	service, err := p.GetServiceByID(task.Service)
+	if err != nil {
+		p.Logger.Error().Err(err).
+			Str("taskID", task.ID).
+			Str("ServiceID", task.Service).
+			Msg("Failed to get service for task")
+		return
+	}
+
+	worker := NewTaskWorker(
+		service,
+		task.ID,
+		task.extractDependencies(),
+		p.LogManager)
 	go worker.Start(ctx, orchestrationID)
 }
 

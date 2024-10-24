@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,12 +26,12 @@ func (e RetryableError) Error() string {
 	return fmt.Sprintf("retryable error: %v", e.Err)
 }
 
-func NewTaskWorker(serviceID string, taskID string, dependencies DependencyKeys, logManager *LogManager) LogWorker {
+func NewTaskWorker(service *ServiceInfo, taskID string, dependencies DependencyKeys, logManager *LogManager) LogWorker {
 	expBackoff := backoff.NewExponentialBackOff()
 	expBackoff.MaxElapsedTime = 10 * time.Minute
 
 	return &TaskWorker{
-		ServiceID:    serviceID,
+		Service:      service,
 		TaskID:       taskID,
 		Dependencies: dependencies,
 		LogManager:   logManager,
@@ -128,7 +130,7 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 	output, err := w.executeTaskWithRetry(ctx, orchestrationID)
 	if err != nil {
 		w.LogManager.Logger.Error().Err(err).Msgf("Cannot execute task %s for orchestration %s", w.TaskID, orchestrationID)
-		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.ServiceID, err.Error())
+		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.Service.ID, err.Error())
 	}
 
 	// Mark this entry as processed
@@ -136,10 +138,10 @@ func (w *TaskWorker) processEntry(ctx context.Context, entry LogEntry, orchestra
 
 	if err := w.LogManager.MarkTaskCompleted(orchestrationID, entry.ID()); err != nil {
 		w.LogManager.Logger.Error().Err(err).Msgf("Cannot mark task %s completed for orchestration %s", w.TaskID, orchestrationID)
-		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.ServiceID, err.Error())
+		return w.LogManager.AppendFailureToLog(orchestrationID, w.TaskID, w.Service.ID, err.Error())
 	}
 
-	w.LogManager.AppendToLog(orchestrationID, "task_output", w.TaskID, output, w.ServiceID)
+	w.LogManager.AppendToLog(orchestrationID, "task_output", w.TaskID, output, w.Service.ID)
 	return nil
 }
 
@@ -199,59 +201,103 @@ func (w *TaskWorker) executeTaskWithRetry(ctx context.Context, orchestrationID s
 }
 
 func (w *TaskWorker) executeTask(ctx context.Context, orchestrationID string) (json.RawMessage, error) {
+	idempotencyKey := w.generateIdempotencyKey(orchestrationID)
+	executionID := uuid.New().String()
+
+	// Initialize or get existing execution
+	result, isNewExecution, err := w.Service.IdempotencyStore.InitializeExecution(idempotencyKey, executionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize execution: %w", err)
+	}
+
+	// If there's an existing execution
+	if !isNewExecution {
+		switch result.State {
+		case ExecutionCompleted:
+			return result.Result, nil
+		case ExecutionFailed:
+			return nil, result.Error
+		case ExecutionInProgress:
+			// Wait for the existing execution
+			return w.waitForResult(ctx, idempotencyKey)
+		}
+	}
+
+	// Start lease renewal goroutine
+	renewalCtx, cancelRenewal := context.WithCancel(ctx)
+	defer cancelRenewal()
+	go w.renewLease(renewalCtx, idempotencyKey, executionID)
+
 	input, err := mergeValueMapsToJson(w.logState.DependencyState)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal input for task %s: %w", w.TaskID, err)
 	}
 
-	// Generate a unique execution ID
-	executionID := uuid.New().String()
-
 	task := &Task{
+		Type:            "task_request",
 		ID:              w.TaskID,
 		ExecutionID:     executionID,
+		IdempotencyKey:  idempotencyKey,
+		ServiceID:       w.Service.ID,
 		Input:           input,
-		ServiceID:       w.ServiceID,
 		OrchestrationID: orchestrationID,
 		ProjectID:       w.LogManager.GetOrchestrationProjectID(orchestrationID),
 		Status:          Processing,
 	}
 
-	resultChan := make(chan json.RawMessage, 1)
-	errChan := make(chan error, 1)
-
-	w.LogManager.controlPlane.WebSocketManager.RegisterTaskCallback(executionID, func(result json.RawMessage, err error) {
-		fields := map[string]any{
-			"executionID": executionID,
-			"result":      string(result),
-		}
-
-		if err != nil {
-			fields["error"] = err.Error()
-			errChan <- err
-		} else {
-			resultChan <- result
-		}
-
-		w.LogManager.Logger.Debug().
-			Fields(fields).
-			Msgf("Triggered a task callback: %s, for serviceID: %s", w.TaskID, w.ServiceID)
-	})
-
-	if err := w.LogManager.controlPlane.WebSocketManager.SendTask(w.ServiceID, task); err != nil {
-		return nil, fmt.Errorf("failed to send task %s for service %s: %w", task.ID, w.ServiceID, err)
+	if err := w.LogManager.controlPlane.WebSocketManager.SendTask(w.Service.ID, task); err != nil {
+		return nil, fmt.Errorf("failed to send task %s for service %s: %w", task.ID, w.Service.ID, err)
 	}
 
-	select {
-	case result := <-resultChan:
-		return result, nil
-	case err := <-errChan:
-		return nil, err
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-time.After(maxExecutionTimeOutDelay * time.Second):
-		w.LogManager.controlPlane.WebSocketManager.UnregisterTaskCallback(executionID)
-		return nil, fmt.Errorf("task execution timed out")
+	return w.waitForResult(ctx, idempotencyKey)
+}
+
+func (w *TaskWorker) renewLease(ctx context.Context, key IdempotencyKey, executionID string) {
+	ticker := time.NewTicker(defaultLeaseDuration / 2)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !w.Service.IdempotencyStore.RenewLease(key, executionID) {
+				return
+			}
+		}
+	}
+}
+
+func (w *TaskWorker) waitForResult(ctx context.Context, key IdempotencyKey) (json.RawMessage, error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	// Set maximum wait time for result
+	maxWait := time.After(maxExecutionTimeOutDelay)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, nil
+
+		case <-maxWait:
+			return nil, fmt.Errorf("task execution timed out waiting for result")
+
+		case <-ticker.C:
+			if result, exists := w.Service.IdempotencyStore.GetExecutionWithResult(key); exists {
+				switch result.State {
+				case ExecutionCompleted:
+					return result.Result, nil
+				case ExecutionFailed:
+					return nil, result.Error
+				case ExecutionInProgress:
+					// Optionally check lease expiration
+					if time.Now().After(result.LeaseExpiry) {
+						return nil, fmt.Errorf("execution lease expired while waiting")
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -284,4 +330,26 @@ func isRetryableError(err error) bool {
 		strings.Contains(errorMsg, "failed to send task") ||
 		strings.Contains(errorMsg, "failed to read result") ||
 		strings.Contains(errorMsg, "rate limit exceeded")
+}
+
+func (w *TaskWorker) generateIdempotencyKey(orchestrationID string) IdempotencyKey {
+	h := sha256.New()
+	h.Write([]byte(orchestrationID))
+	h.Write([]byte(w.TaskID))
+
+	inputs := w.sortedInputs()
+	for _, input := range inputs {
+		h.Write([]byte(input))
+	}
+
+	return IdempotencyKey(fmt.Sprintf("%x", h.Sum(nil)))
+}
+
+func (w *TaskWorker) sortedInputs() []string {
+	var inputs []string
+	for k, v := range w.logState.DependencyState {
+		inputs = append(inputs, fmt.Sprintf("%s:%s", k, string(v)))
+	}
+	sort.Strings(inputs)
+	return inputs
 }

@@ -34,8 +34,13 @@ func (h *HealthCoordinator) GetActiveOrchestrationsAndTasksForService(serviceID 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	projects := h.plane.ProjectsForService(serviceID)
-	return h.plane.ActiveOrchestrationsWithTasks(projects, serviceID)
+	projectID, err := h.plane.GetProjectIDForService(serviceID)
+	if err != nil {
+		h.logger.Error().Err(err).Str("serviceID", serviceID).Msg("Failed to get project ID from control plane")
+		return map[string]map[string]SubTask{}
+	}
+
+	return h.plane.ActiveOrchestrationsWithTasks(projectID, serviceID)
 }
 
 func (h *HealthCoordinator) restartOrchestrationTasks(orchestrationsAndTasks map[string]map[string]SubTask) {
