@@ -19,6 +19,72 @@ By intelligently coordinating tasks across your agents, tools, and existing stac
 
 [Learn why we built orra →](https://tinyurl.com/orra-launch-blog-post)
 
+
+## ❓ Frequently Asked Questions
+
+### What is orra?
+
+Orra is infrastructure for resilient AI agent workflows. It provides a plan engine that coordinates tasks across agents, tools, and your existing stack, with durable execution, state persistence, failure recovery, and audit logging — all designed to work with any language, agent framework, or deployment platform.
+
+### How is orra different from agent frameworks like LangChain or CrewAI?
+
+Agent frameworks focus on building individual agents (tool calling, memory, reasoning loops). Orra focuses on **orchestrating multiple agents in production** — handling failure recovery, state persistence, execution plan validation, and workflow coordination. You can use orra alongside any agent framework.
+
+### How is orra different from MCP?
+
+MCP (Model Context Protocol) handles **connecting** LLMs to external tools and data sources. Orra handles **coordinating complex workflows** — planning, execution, failure recovery, and state management. They complement each other: use MCP to expose tool capabilities, then use orra to orchestrate those tools in production workflows.
+
+### What languages and frameworks does orra support?
+
+Orra is language and framework agnostic. It works with any language and any agent framework through its HTTP API. Current examples include JavaScript/TypeScript and Python (with CrewAI integration). Additional SDKs for Ruby, .NET, and Go are coming soon.
+
+### Can I run orra locally?
+
+Yes. Orra's Plan Engine runs as a Docker container. You can start it locally with Docker Compose for development, or deploy it on-premises using Kubernetes or any container orchestration platform.
+
+### What LLM models does orra support?
+
+Orra requires two types of models:
+- **Reasoning models**: For task planning (e.g., DeepSeek R1, QwQ-32b, or any OpenAI-compatible model)
+- **Embedding models**: For execution plan caching (e.g., Jina embeddings v2 small)
+
+Any model serving solution that exposes an OpenAI-compatible API works — vLLM, LMStudio, Ollama, Replicate, etc. Self-hosted models are fully supported.
+
+### How does orra handle failures?
+
+Orra provides multiple failure recovery mechanisms:
+- **Durable execution**: State is persisted to BadgerDB, so workflows survive crashes and restarts
+- **Revert state**: Automatically roll back to previous states when failures occur
+- **Pre-validated execution plans**: Plans are validated before execution to catch issues early
+- **Automatic health monitoring**: Continuous monitoring of agent and tool health
+- **Escalation**: Failed tasks can be escalated to fallback agents or human operators
+
+### How do I deploy orra in production?
+
+Options include:
+- **Local development**: Single Docker instance via Docker Compose
+- **On-premises**: Deploy on your own infrastructure with Kubernetes or preferred orchestration
+- **Managed cloud**: Run on container services like DigitalOcean App Platform
+- Book office hours with the orra team for production deployment guidance
+
+### How does the plan engine work?
+
+1. **Planning**: The planning agent analyzes your workflow goals and discovers available agents/tools
+2. **Validation**: Execution plans are pre-validated before running
+3. **Execution**: Tasks are coordinated across agents, tools, and services
+4. **Monitoring**: Real-time status tracking and audit logs provide full visibility
+5. **Recovery**: Automatic failure detection and state rollback keep workflows moving
+
+### Is there a cloud version?
+
+Orra is primarily designed for self-hosting and on-premises deployment. Check the orra website and docs for cloud hosting options.
+
+### How do I get help?
+
+- Report bugs or request features: [Create an issue](https://github.com/orra-dev/orra/issues/new?template=bug-report-feature-request.yml)
+- Discuss ideas: [GitHub Discussions](https://github.com/orra-dev/orra/discussions)
+- Production deployment help: [Book office hours](https://cal.com/orra-dev/office-hours)
+
 ### Coming Soon
 
 * Integration adapters for popular agent frameworks
